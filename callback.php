@@ -74,8 +74,13 @@ if (isset($_GET['code']) && isset($_GET['state'])) {
     }
     // Store origin domain for display (before clearing session)
     $displayOrigin = $originDomain;
-    // Check if this is StreamersConnect's own authentication
-    if ($returnUrl === INTERNAL_DASHBOARD_URL) {
+    // Check if this is StreamersConnect's own authentication (dashboard or base URL)
+    $internalUrls = [
+        INTERNAL_DASHBOARD_URL,
+        'https://' . STREAMERS_CONNECT_DOMAIN . '/',
+        'https://' . STREAMERS_CONNECT_DOMAIN
+    ];
+    if (in_array($returnUrl, $internalUrls)) {
         // Handle internal auth directly - store session and redirect to home
         $_SESSION['user_id'] = $returnData['user']['id'];
         $_SESSION['user_login'] = $returnData['user']['login'];

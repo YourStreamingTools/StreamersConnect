@@ -4,6 +4,28 @@ session_start();
 // Load configuration
 require_once '/var/www/config/streamersconnect.php';
 
+// Handle auth callback for internal login
+if (isset($_GET['auth_data'])) {
+    $authData = json_decode(base64_decode($_GET['auth_data']), true);
+    if (isset($authData['success']) && $authData['success'] && $authData['service'] === 'twitch') {
+        // Store user session
+        $_SESSION['user_id'] = $authData['user']['id'];
+        $_SESSION['user_login'] = $authData['user']['login'];
+        $_SESSION['user_display_name'] = $authData['user']['display_name'];
+        $_SESSION['user_email'] = $authData['user']['email'];
+        $_SESSION['access_token'] = $authData['access_token'];
+        $_SESSION['refresh_token'] = $authData['refresh_token'];
+        $_SESSION['auth_service'] = $authData['service'];
+    }
+    // Redirect to clean URL
+    header('Location: https://streamersconnect.com/');
+    exit;
+}
+// Handle error
+if (isset($_GET['error'])) {
+    // Could display error message here
+    // For now, just continue to show the page
+}
 // Handle logout
 if (isset($_GET['logout'])) {
     session_destroy();
