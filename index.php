@@ -150,7 +150,7 @@ function buildDiscordAuthUrl($scopes, $customClientId = null) {
             <div class="logo"><i class="fas fa-lock"></i></div>
             <h1>StreamersConnect</h1>
             <p class="subtitle">Authentication Service for StreamingTools Services</p>
-            <a href="?login=streamersconnect.com&service=twitch&scopes=user:read:email&return_url=https://streamersconnect.com/dashboard.php" class="btn">
+            <a href="?login=streamersconnect.com&service=twitch&scopes=user:read:email&return_url=https://streamersconnect.com/" class="btn">
                 <i class="fab fa-twitch"></i> Login with Twitch
             </a>
             <div class="info-box">
