@@ -25,8 +25,8 @@ define('INTERNAL_DASHBOARD_URL', 'https://' . STREAMERS_CONNECT_DOMAIN . '/dashb
 // Whitelist of allowed domains that can use this auth service
 // Add all your domains here for security
 $ALLOWED_DOMAINS = [
-    'botofthespecter.com',
-    'www.botofthespecter.com',
+    'streamersconnect.com',
+    'www.streamersconnect.com',
     // Add more domains as needed
 ];
 
