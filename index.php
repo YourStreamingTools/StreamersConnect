@@ -24,10 +24,22 @@ if (isset($_GET['service']) && isset($_GET['login']) && isset($_GET['scopes'])) 
     if (!in_array($originDomain, $ALLOWED_DOMAINS)) {
         die('Error: Unauthorized domain');
     }
+    // Require return_url parameter
+    if (!isset($_GET['return_url']) || empty($_GET['return_url'])) {
+        http_response_code(400);
+        die('Error: return_url parameter is required');
+    }
+    $returnUrl = $_GET['return_url'];
+    $returnUrlHost = parse_url($returnUrl, PHP_URL_HOST);
+    // Security: Ensure return URL's domain matches the login domain
+    if ($returnUrlHost !== $originDomain) {
+        http_response_code(403);
+        die('Error: Return URL domain does not match origin domain. Security violation detected.');
+    }
     // Store session data for callback
     $_SESSION['auth_service'] = $service;
     $_SESSION['origin_domain'] = $originDomain;
-    $_SESSION['return_url'] = isset($_GET['return_url']) ? $_GET['return_url'] : "https://{$originDomain}/auth/callback";
+    $_SESSION['return_url'] = $returnUrl;
     $_SESSION['requested_scopes'] = $requestedScopes;
     // Store custom credentials if provided
     if ($customClientId && $customClientSecret) {
