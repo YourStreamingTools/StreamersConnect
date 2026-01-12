@@ -1,0 +1,48 @@
+# StreamersConnect - Git Ignore File
+
+# Configuration files with sensitive data
+config.php
+
+# Log files
+logs/
+*.log
+
+# Database files (if using SQLite)
+*.db
+*.sqlite
+*.sqlite3
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# PHP
+vendor/
+composer.phar
+composer.lock
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Backup files
+*.bak
+*.backup
+*~
+
+# Temporary files
+tmp/
+temp/
+cache/
+
+# Session files
+sessions/
+
+# Error logs
+error_log
+php_error.log
