@@ -72,6 +72,8 @@ if (isset($_GET['code']) && isset($_GET['state'])) {
     if (!$returnUrl || !$originDomain) {
         die('Error: No return URL found in session.');
     }
+    // Store origin domain for display (before clearing session)
+    $displayOrigin = $originDomain;
     // Clear session data
     unset($_SESSION['oauth_state'], $_SESSION['return_url'], $_SESSION['origin_domain'], $_SESSION['requested_scopes'], $_SESSION['auth_service'], $_SESSION['custom_client_id'], $_SESSION['custom_client_secret']);
     // Encode the data as JWT or encrypted string (for production, use proper encryption)
@@ -86,6 +88,7 @@ if (isset($_GET['error'])) {
     $error = $_GET['error'];
     $errorDescription = $_GET['error_description'] ?? 'Unknown error';
     $returnUrl = $_SESSION['return_url'] ?? null;
+    $displayOrigin = $_SESSION['origin_domain'] ?? null;
     // Set error state for display
     $authError = true;
     $errorMessage = match($error) {
@@ -229,15 +232,19 @@ function getDiscordUserData($accessToken) {
             <div class="error-icon" style="color: #dc3545; font-size: 3rem; margin-bottom: 1rem;">✖</div>
             <h2>Authentication Failed</h2>
             <p><?php echo $errorMessage; ?></p>
-            <?php if (isset($redirectUrl)): ?>
-                <p style="margin-top: 2rem; font-size: 0.9rem; opacity: 0.7;">Redirecting you back in <span id="countdown">5</span> seconds...</p>
+            <?php if (isset($redirectUrl) && isset($displayOrigin)): ?>
+                <p style="margin-top: 2rem; font-size: 0.9rem; opacity: 0.7;">Redirecting back to <strong><?php echo htmlspecialchars($displayOrigin); ?></strong> in <span id="countdown">5</span> seconds...</p>
             <?php else: ?>
                 <p style="margin-top: 2rem;">Please close this window and try again.</p>
             <?php endif; ?>
         <?php elseif (isset($redirectUrl)): ?>
             <div class="spinner"></div>
             <h2>Authentication Successful!</h2>
-            <p>Redirecting you back to your service...</p>
+            <?php if (isset($displayOrigin)): ?>
+                <p>Redirecting you back to <strong><?php echo htmlspecialchars($displayOrigin); ?></strong>...</p>
+            <?php else: ?>
+                <p>Redirecting you back to your service...</p>
+            <?php endif; ?>
         <?php else: ?>
             <div class="spinner"></div>
             <h2>Processing Authentication...</h2>
