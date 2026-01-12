@@ -129,6 +129,8 @@ function getTwitchUserData($accessToken) {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Processing Authentication...</title>
+    <link rel="icon" href="https://cdn.yourstreamingtools.com/img/logo.ico">
+    <link rel="apple-touch-icon" href="https://cdn.yourstreamingtools.com/img/logo.ico">
     <link rel="stylesheet" href="custom.css">
 </head>
 <body>
