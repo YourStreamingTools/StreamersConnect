@@ -2,7 +2,7 @@
 session_start();
 
 // Load configuration
-require_once 'config.php';
+require_once '/var/www/config/streamersconnect.php';
 
 /**
  * Main handler for incoming authentication requests
