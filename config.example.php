@@ -1,14 +1,21 @@
 <?php
 /**
- * StreamersConnect Configuration
+ * StreamersConnect Configuration Example
  * 
- * Copy this file to config.php and fill in your actual values
+ * Copy this structure to your server's config directory and fill in your credentials.
  */
 
 // Twitch Application Credentials
 // Get these from https://dev.twitch.tv/console/apps
-define('TWITCH_CLIENT_ID', 'your_client_id_here');
-define('TWITCH_CLIENT_SECRET', 'your_client_secret_here');
+// Create a new application and set the OAuth Redirect URL to: https://yourdomain.com/callback.php
+define('TWITCH_CLIENT_ID', 'your_twitch_client_id_here');
+define('TWITCH_CLIENT_SECRET', 'your_twitch_client_secret_here');
+
+// Discord Application Credentials
+// Get these from https://discord.com/developers/applications
+// Create a new application, go to OAuth2 settings, and add redirect URL: https://yourdomain.com/callback.php
+define('DISCORD_CLIENT_ID', 'your_discord_client_id_here');
+define('DISCORD_CLIENT_SECRET', 'your_discord_client_secret_here');
 
 // Your StreamersConnect domain
 define('STREAMERS_CONNECT_DOMAIN', 'streamersconnect.com');
