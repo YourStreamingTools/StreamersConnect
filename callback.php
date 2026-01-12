@@ -86,12 +86,19 @@ if (isset($_GET['error'])) {
     $error = $_GET['error'];
     $errorDescription = $_GET['error_description'] ?? 'Unknown error';
     $returnUrl = $_SESSION['return_url'] ?? null;
+    // Set error state for display
+    $authError = true;
+    $errorMessage = match($error) {
+        'access_denied' => 'Authentication was canceled or denied.',
+        'invalid_request' => 'Invalid authentication request.',
+        'unauthorized_client' => 'Unauthorized client application.',
+        'server_error' => 'Server error occurred during authentication.',
+        default => htmlspecialchars($errorDescription)
+    };
+    // If we have a return URL, we'll redirect after showing error for a moment
     if ($returnUrl) {
         $separator = strpos($returnUrl, '?') !== false ? '&' : '?';
-        header('Location: ' . $returnUrl . $separator . 'error=' . urlencode($error) . '&error_description=' . urlencode($errorDescription));
-        exit;
-    } else {
-        die('Authentication Error: ' . htmlspecialchars($errorDescription));
+        $redirectUrl = $returnUrl . $separator . 'error=' . urlencode($error) . '&error_description=' . urlencode($errorDescription);
     }
 }
 
@@ -218,15 +225,45 @@ function getDiscordUserData($accessToken) {
 </head>
 <body>
     <div class="loader">
-        <div class="spinner"></div>
-        <h2><?php echo isset($redirectUrl) ? 'Authentication Successful!' : 'Processing Authentication...'; ?></h2>
-        <p><?php echo isset($redirectUrl) ? 'Redirecting you back to your service...' : 'Please wait while we redirect you back to your service.'; ?></p>
+        <?php if (isset($authError) && $authError): ?>
+            <div class="error-icon" style="color: #dc3545; font-size: 3rem; margin-bottom: 1rem;">✖</div>
+            <h2>Authentication Failed</h2>
+            <p><?php echo $errorMessage; ?></p>
+            <?php if (isset($redirectUrl)): ?>
+                <p style="margin-top: 2rem; font-size: 0.9rem; opacity: 0.7;">Redirecting you back in <span id="countdown">5</span> seconds...</p>
+            <?php else: ?>
+                <p style="margin-top: 2rem;">Please close this window and try again.</p>
+            <?php endif; ?>
+        <?php elseif (isset($redirectUrl)): ?>
+            <div class="spinner"></div>
+            <h2>Authentication Successful!</h2>
+            <p>Redirecting you back to your service...</p>
+        <?php else: ?>
+            <div class="spinner"></div>
+            <h2>Processing Authentication...</h2>
+            <p>Please wait while we redirect you back to your service.</p>
+        <?php endif; ?>
     </div>
     <?php if (isset($redirectUrl)): ?>
     <script>
+        <?php if (isset($authError) && $authError): ?>
+        // Error redirect with countdown
+        let countdown = 5;
+        const countdownEl = document.getElementById('countdown');
+        const timer = setInterval(function() {
+            countdown--;
+            if (countdownEl) countdownEl.textContent = countdown;
+            if (countdown <= 0) {
+                clearInterval(timer);
+                window.location.href = <?php echo json_encode($redirectUrl); ?>;
+            }
+        }, 1000);
+        <?php else: ?>
+        // Success redirect
         setTimeout(function() {
             window.location.href = <?php echo json_encode($redirectUrl); ?>;
         }, 2000);
+        <?php endif; ?>
     </script>
     <?php endif; ?>
 </body>
