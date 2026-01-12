@@ -5,28 +5,50 @@ session_start();
 require_once '/var/www/config/streamersconnect.php';
 
 /**
- * Handle OAuth callback from Twitch
+ * Handle OAuth callback from service provider
  */
 if (isset($_GET['code']) && isset($_GET['state'])) {
     // Verify state to prevent CSRF attacks
     if (!isset($_SESSION['oauth_state']) || $_GET['state'] !== $_SESSION['oauth_state']) {
         die('Error: Invalid state parameter. Possible CSRF attack.');
     }
-    // Get the authorization code
+    // Get the authorization code and service
     $authCode = $_GET['code'];
-    // Exchange authorization code for access token
-    $tokenData = exchangeCodeForToken($authCode);
-    if ($tokenData === false) {
-        die('Error: Failed to exchange authorization code for access token.');
+    $service = $_SESSION['auth_service'] ?? null;
+    // Validate service parameter exists
+    if (!$service) {
+        http_response_code(400);
+        die('Error: Missing service information. Authentication request was not properly initiated.');
     }
-    // Get user information from Twitch
-    $userData = getTwitchUserData($tokenData['access_token']);
-    if ($userData === false) {
-        die('Error: Failed to retrieve user data from Twitch.');
+    // Route to appropriate service handler
+    switch ($service) {
+        case 'twitch':
+            $tokenData = exchangeTwitchCodeForToken($authCode);
+            if ($tokenData === false) {
+                die('Error: Failed to exchange authorization code for access token.');
+            }
+            $userData = getTwitchUserData($tokenData['access_token']);
+            if ($userData === false) {
+                die('Error: Failed to retrieve user data from Twitch.');
+            }
+            break;
+        case 'discord':
+            $tokenData = exchangeDiscordCodeForToken($authCode);
+            if ($tokenData === false) {
+                die('Error: Failed to exchange authorization code for access token.');
+            }
+            $userData = getDiscordUserData($tokenData['access_token']);
+            if ($userData === false) {
+                die('Error: Failed to retrieve user data from Discord.');
+            }
+            break;
+        default:
+            die('Error: Unknown service in session');
     }
     // Prepare data to send back to the originating service
     $returnData = [
         'success' => true,
+        'service' => $service,
         'access_token' => $tokenData['access_token'],
         'refresh_token' => $tokenData['refresh_token'],
         'expires_in' => $tokenData['expires_in'],
@@ -48,7 +70,7 @@ if (isset($_GET['code']) && isset($_GET['state'])) {
         die('Error: No return URL found in session.');
     }
     // Clear session data
-    unset($_SESSION['oauth_state'], $_SESSION['return_url'], $_SESSION['origin_domain'], $_SESSION['requested_scopes']);
+    unset($_SESSION['oauth_state'], $_SESSION['return_url'], $_SESSION['origin_domain'], $_SESSION['requested_scopes'], $_SESSION['auth_service']);
     // Encode the data as JWT or encrypted string (for production, use proper encryption)
     $encodedData = base64_encode(json_encode($returnData));
     // Redirect back to the originating service with the auth data
@@ -72,9 +94,9 @@ if (isset($_GET['error'])) {
 }
 
 /**
- * Exchange authorization code for access token
+ * Exchange Twitch authorization code for access token
  */
-function exchangeCodeForToken($code) {
+function exchangeTwitchCodeForToken($code) {
     $tokenUrl = 'https://id.twitch.tv/oauth2/token';
     $postData = [
         'client_id' => TWITCH_CLIENT_ID,
@@ -121,6 +143,65 @@ function getTwitchUserData($accessToken) {
     }
     $data = json_decode($response, true);
     return $data['data'][0] ?? false;
+}
+
+/**
+ * Exchange Discord authorization code for access token
+ */
+function exchangeDiscordCodeForToken($code) {
+    $tokenUrl = 'https://discord.com/api/oauth2/token';
+    $postData = [
+        'client_id' => DISCORD_CLIENT_ID,
+        'client_secret' => DISCORD_CLIENT_SECRET,
+        'code' => $code,
+        'grant_type' => 'authorization_code',
+        'redirect_uri' => REDIRECT_URI
+    ];
+    $ch = curl_init();
+    curl_setopt($ch, CURLOPT_URL, $tokenUrl);
+    curl_setopt($ch, CURLOPT_POST, true);
+    curl_setopt($ch, CURLOPT_POSTFIELDS, http_build_query($postData));
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
+    $response = curl_exec($ch);
+    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+    if ($httpCode !== 200) {
+        error_log('Discord token exchange failed: ' . $response);
+        return false;
+    }
+    return json_decode($response, true);
+}
+
+/**
+ * Get user data from Discord API
+ */
+function getDiscordUserData($accessToken) {
+    $userUrl = 'https://discord.com/api/users/@me';
+    $ch = curl_init();
+    curl_setopt($ch, CURLOPT_URL, $userUrl);
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
+    curl_setopt($ch, CURLOPT_HTTPHEADER, [
+        'Authorization: Bearer ' . $accessToken
+    ]);
+    $response = curl_exec($ch);
+    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+    if ($httpCode !== 200) {
+        error_log('Discord user data fetch failed: ' . $response);
+        return false;
+    }
+    $userData = json_decode($response, true);
+    // Normalize Discord user data to match expected format
+    return [
+        'id' => $userData['id'],
+        'login' => $userData['username'],
+        'display_name' => $userData['global_name'] ?? $userData['username'],
+        'email' => $userData['email'] ?? null,
+        'profile_image_url' => $userData['avatar'] ? "https://cdn.discordapp.com/avatars/{$userData['id']}/{$userData['avatar']}.png" : null,
+        'broadcaster_type' => '' // Discord doesn't have this concept
+    ];
 }
 ?>
 <!DOCTYPE html>
