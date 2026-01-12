@@ -12,6 +12,9 @@ if (isset($_GET['service']) && isset($_GET['login']) && isset($_GET['scopes'])) 
     $service = strtolower(filter_var($_GET['service'], FILTER_SANITIZE_STRING));
     $originDomain = filter_var($_GET['login'], FILTER_SANITIZE_STRING);
     $requestedScopes = filter_var($_GET['scopes'], FILTER_SANITIZE_STRING);
+    // Check for custom OAuth credentials in headers
+    $customClientId = $_SERVER['HTTP_X_OAUTH_CLIENT_ID'] ?? null;
+    $customClientSecret = $_SERVER['HTTP_X_OAUTH_CLIENT_SECRET'] ?? null;
     // Validate service is supported
     $supportedServices = ['twitch', 'discord'];
     if (!in_array($service, $supportedServices)) {
@@ -26,13 +29,18 @@ if (isset($_GET['service']) && isset($_GET['login']) && isset($_GET['scopes'])) 
     $_SESSION['origin_domain'] = $originDomain;
     $_SESSION['return_url'] = isset($_GET['return_url']) ? $_GET['return_url'] : "https://{$originDomain}/auth/callback";
     $_SESSION['requested_scopes'] = $requestedScopes;
+    // Store custom credentials if provided
+    if ($customClientId && $customClientSecret) {
+        $_SESSION['custom_client_id'] = $customClientId;
+        $_SESSION['custom_client_secret'] = $customClientSecret;
+    }
     // Route to appropriate OAuth handler
     switch ($service) {
         case 'twitch':
-            $authUrl = buildTwitchAuthUrl($requestedScopes);
+            $authUrl = buildTwitchAuthUrl($requestedScopes, $customClientId);
             break;
         case 'discord':
-            $authUrl = buildDiscordAuthUrl($requestedScopes);
+            $authUrl = buildDiscordAuthUrl($requestedScopes, $customClientId);
             break;
         default:
             die('Error: Service handler not implemented');
@@ -45,9 +53,10 @@ if (isset($_GET['service']) && isset($_GET['login']) && isset($_GET['scopes'])) 
 /**
  * Build Twitch OAuth authorization URL
  */
-function buildTwitchAuthUrl($scopes) {
+function buildTwitchAuthUrl($scopes, $customClientId = null) {
+    $clientId = $customClientId ?? TWITCH_CLIENT_ID;
     $params = [
-        'client_id' => TWITCH_CLIENT_ID,
+        'client_id' => $clientId,
         'redirect_uri' => REDIRECT_URI,
         'response_type' => 'code',
         'scope' => $scopes,
@@ -60,9 +69,10 @@ function buildTwitchAuthUrl($scopes) {
 /**
  * Build Discord OAuth authorization URL
  */
-function buildDiscordAuthUrl($scopes) {
+function buildDiscordAuthUrl($scopes, $customClientId = null) {
+    $clientId = $customClientId ?? DISCORD_CLIENT_ID;
     $params = [
-        'client_id' => DISCORD_CLIENT_ID,
+        'client_id' => $clientId,
         'redirect_uri' => REDIRECT_URI,
         'response_type' => 'code',
         'scope' => $scopes,
@@ -80,11 +90,12 @@ function buildDiscordAuthUrl($scopes) {
     <title>StreamersConnect - Authentication Service</title>
     <link rel="icon" href="https://cdn.yourstreamingtools.com/img/logo.ico">
     <link rel="apple-touch-icon" href="https://cdn.yourstreamingtools.com/img/logo.ico">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.css">
     <link rel="stylesheet" href="custom.css">
 </head>
 <body>
     <div class="container">
-        <div class="logo">🔐</div>
+        <div class="logo"><i class="fas fa-lock"></i></div>
         <h1>StreamersConnect</h1>
         <p class="subtitle">Authentication Service for StreamingTools Services</p>
         <div class="info-box">
@@ -94,8 +105,8 @@ function buildDiscordAuthUrl($scopes) {
         <div class="info-box">
             <h3>Services Enabled</h3>
             <ul class="feature-list">
-                <li>🎮 Twitch</li>
-                <li>💬 Discord</li>
+                <li><i class="fab fa-twitch"></i> Twitch</li>
+                <li><i class="fab fa-discord"></i> Discord</li>
             </ul>
         </div>
         <ul class="feature-list">
@@ -108,6 +119,10 @@ function buildDiscordAuthUrl($scopes) {
             <h3>For Authorized Services</h3>
             <p><strong>Integration:</strong><br>
             Contact the StreamingTools team for access credentials and integration documentation.</p>
+            <p><strong>Custom OAuth Applications:</strong><br>
+            Use your own OAuth credentials by including headers:<br>
+            <code>X-OAuth-Client-ID</code> and <code>X-OAuth-Client-Secret</code><br>
+            If not provided, defaults to StreamersConnect shared credentials.</p>
         </div>
         <div class="footer">
             <p>&copy; <?php echo date('Y'); ?> StreamersConnect - Part of the StreamingTools Ecosystem</p>

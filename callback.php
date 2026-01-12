@@ -20,20 +20,23 @@ if (isset($_GET['code']) && isset($_GET['state'])) {
         http_response_code(400);
         die('Error: Missing service information. Authentication request was not properly initiated.');
     }
+    // Get custom credentials from session if they were provided
+    $customClientId = $_SESSION['custom_client_id'] ?? null;
+    $customClientSecret = $_SESSION['custom_client_secret'] ?? null;
     // Route to appropriate service handler
     switch ($service) {
         case 'twitch':
-            $tokenData = exchangeTwitchCodeForToken($authCode);
+            $tokenData = exchangeTwitchCodeForToken($authCode, $customClientId, $customClientSecret);
             if ($tokenData === false) {
                 die('Error: Failed to exchange authorization code for access token.');
             }
-            $userData = getTwitchUserData($tokenData['access_token']);
+            $userData = getTwitchUserData($tokenData['access_token'], $customClientId);
             if ($userData === false) {
                 die('Error: Failed to retrieve user data from Twitch.');
             }
             break;
         case 'discord':
-            $tokenData = exchangeDiscordCodeForToken($authCode);
+            $tokenData = exchangeDiscordCodeForToken($authCode, $customClientId, $customClientSecret);
             if ($tokenData === false) {
                 die('Error: Failed to exchange authorization code for access token.');
             }
@@ -70,7 +73,7 @@ if (isset($_GET['code']) && isset($_GET['state'])) {
         die('Error: No return URL found in session.');
     }
     // Clear session data
-    unset($_SESSION['oauth_state'], $_SESSION['return_url'], $_SESSION['origin_domain'], $_SESSION['requested_scopes'], $_SESSION['auth_service']);
+    unset($_SESSION['oauth_state'], $_SESSION['return_url'], $_SESSION['origin_domain'], $_SESSION['requested_scopes'], $_SESSION['auth_service'], $_SESSION['custom_client_id'], $_SESSION['custom_client_secret']);
     // Encode the data as JWT or encrypted string (for production, use proper encryption)
     $encodedData = base64_encode(json_encode($returnData));
     // Redirect back to the originating service with the auth data
@@ -96,11 +99,11 @@ if (isset($_GET['error'])) {
 /**
  * Exchange Twitch authorization code for access token
  */
-function exchangeTwitchCodeForToken($code) {
+function exchangeTwitchCodeForToken($code, $customClientId = null, $customClientSecret = null) {
     $tokenUrl = 'https://id.twitch.tv/oauth2/token';
     $postData = [
-        'client_id' => TWITCH_CLIENT_ID,
-        'client_secret' => TWITCH_CLIENT_SECRET,
+        'client_id' => $customClientId ?? TWITCH_CLIENT_ID,
+        'client_secret' => $customClientSecret ?? TWITCH_CLIENT_SECRET,
         'code' => $code,
         'grant_type' => 'authorization_code',
         'redirect_uri' => REDIRECT_URI
@@ -124,7 +127,7 @@ function exchangeTwitchCodeForToken($code) {
 /**
  * Get user data from Twitch API
  */
-function getTwitchUserData($accessToken) {
+function getTwitchUserData($accessToken, $customClientId = null) {
     $userUrl = 'https://api.twitch.tv/helix/users';
     $ch = curl_init();
     curl_setopt($ch, CURLOPT_URL, $userUrl);
@@ -132,7 +135,7 @@ function getTwitchUserData($accessToken) {
     curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
     curl_setopt($ch, CURLOPT_HTTPHEADER, [
         'Authorization: Bearer ' . $accessToken,
-        'Client-Id: ' . TWITCH_CLIENT_ID
+        'Client-Id: ' . ($customClientId ?? TWITCH_CLIENT_ID)
     ]);
     $response = curl_exec($ch);
     $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
@@ -148,11 +151,11 @@ function getTwitchUserData($accessToken) {
 /**
  * Exchange Discord authorization code for access token
  */
-function exchangeDiscordCodeForToken($code) {
+function exchangeDiscordCodeForToken($code, $customClientId = null, $customClientSecret = null) {
     $tokenUrl = 'https://discord.com/api/oauth2/token';
     $postData = [
-        'client_id' => DISCORD_CLIENT_ID,
-        'client_secret' => DISCORD_CLIENT_SECRET,
+        'client_id' => $customClientId ?? DISCORD_CLIENT_ID,
+        'client_secret' => $customClientSecret ?? DISCORD_CLIENT_SECRET,
         'code' => $code,
         'grant_type' => 'authorization_code',
         'redirect_uri' => REDIRECT_URI
