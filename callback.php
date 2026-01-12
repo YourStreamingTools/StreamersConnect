@@ -74,13 +74,30 @@ if (isset($_GET['code']) && isset($_GET['state'])) {
     }
     // Store origin domain for display (before clearing session)
     $displayOrigin = $originDomain;
-    // Clear session data
-    unset($_SESSION['oauth_state'], $_SESSION['return_url'], $_SESSION['origin_domain'], $_SESSION['requested_scopes'], $_SESSION['auth_service'], $_SESSION['custom_client_id'], $_SESSION['custom_client_secret']);
-    // Encode the data as JWT or encrypted string (for production, use proper encryption)
-    $encodedData = base64_encode(json_encode($returnData));
-    // Build redirect URL
-    $separator = strpos($returnUrl, '?') !== false ? '&' : '?';
-    $redirectUrl = $returnUrl . $separator . 'auth_data=' . urlencode($encodedData);
+    // Check if this is StreamersConnect's own authentication
+    if ($returnUrl === INTERNAL_DASHBOARD_URL) {
+        // Handle internal auth directly - store session and redirect to home
+        $_SESSION['user_id'] = $returnData['user']['id'];
+        $_SESSION['user_login'] = $returnData['user']['login'];
+        $_SESSION['user_display_name'] = $returnData['user']['display_name'];
+        $_SESSION['user_email'] = $returnData['user']['email'];
+        $_SESSION['access_token'] = $returnData['access_token'];
+        $_SESSION['refresh_token'] = $returnData['refresh_token'];
+        $_SESSION['auth_service'] = $service;
+        // Clear OAuth state data
+        unset($_SESSION['oauth_state'], $_SESSION['return_url'], $_SESSION['origin_domain'], $_SESSION['requested_scopes'], $_SESSION['custom_client_id'], $_SESSION['custom_client_secret']);
+        // Redirect to home page
+        $redirectUrl = 'https://' . STREAMERS_CONNECT_DOMAIN . '/';
+    } else {
+        // External service authentication - send auth_data back
+        // Clear session data
+        unset($_SESSION['oauth_state'], $_SESSION['return_url'], $_SESSION['origin_domain'], $_SESSION['requested_scopes'], $_SESSION['auth_service'], $_SESSION['custom_client_id'], $_SESSION['custom_client_secret']);
+        // Encode the data as JWT or encrypted string (for production, use proper encryption)
+        $encodedData = base64_encode(json_encode($returnData));
+        // Build redirect URL
+        $separator = strpos($returnUrl, '?') !== false ? '&' : '?';
+        $redirectUrl = $returnUrl . $separator . 'auth_data=' . urlencode($encodedData);
+    }
 }
 
 // Handle OAuth errors

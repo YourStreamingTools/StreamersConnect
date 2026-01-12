@@ -4,6 +4,13 @@ session_start();
 // Load configuration
 require_once '/var/www/config/streamersconnect.php';
 
+// Handle logout
+if (isset($_GET['logout'])) {
+    session_destroy();
+    header('Location: https://streamersconnect.com/');
+    exit;
+}
+
 /**
  * Main handler for incoming authentication requests
  */
@@ -103,42 +110,79 @@ function buildDiscordAuthUrl($scopes, $customClientId = null) {
     <link rel="icon" href="https://cdn.yourstreamingtools.com/img/logo.ico">
     <link rel="apple-touch-icon" href="https://cdn.yourstreamingtools.com/img/logo.ico">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.css">
-    <link rel="stylesheet" href="custom.css">
+    <link rel="stylesheet" href="custom.css?v=<?php echo filemtime(__DIR__ . '/custom.css'); ?>">
 </head>
 <body>
-    <div class="container">
-        <div class="logo"><i class="fas fa-lock"></i></div>
-        <h1>StreamersConnect</h1>
-        <p class="subtitle">Authentication Service for StreamingTools Services</p>
-        <div class="info-box">
-            <h3>How It Works</h3>
-            <p>StreamersConnect provides centralized OAuth authentication for our family of streaming services and authorized partner applications.</p>
+    <?php if (isset($_SESSION['user_id'])): ?>
+        <!-- Partner Dashboard - Coming Soon -->
+        <div class="container">
+            <div class="header">
+                <div>
+                    <div class="logo"><i class="fas fa-lock"></i></div>
+                    <h1>StreamersConnect</h1>
+                </div>
+                <a href="?logout=1" class="btn btn-logout">Logout</a>
+            </div>
+            <div class="info-box">
+                <h3><i class="fas fa-user"></i> Welcome, <?php echo htmlspecialchars($_SESSION['user_display_name']); ?>!</h3>
+            </div>
+            <div class="info-box dashboard-highlight">
+                <h3><i class="fas fa-rocket"></i> Partner Dashboard - Coming Soon</h3>
+                <p>We're building an exclusive dashboard for authorized partners to manage their integrations, view analytics, and configure OAuth applications.</p>
+                <p style="margin-top: 1rem;"><strong>Upcoming Features:</strong></p>
+                <ul class="feature-list">
+                    <li><i class="fas fa-key"></i> OAuth Application Management</li>
+                    <li><i class="fas fa-chart-bar"></i> Authentication Analytics</li>
+                    <li><i class="fas fa-cog"></i> Service Configuration</li>
+                    <li><i class="fas fa-bell"></i> Webhook Management</li>
+                    <li><i class="fas fa-shield-alt"></i> Security & Compliance Tools</li>
+                </ul>
+            </div>
+            <div class="info-box">
+                <h3><i class="fas fa-handshake"></i> Become a Partner</h3>
+                <p>Interested in integrating StreamersConnect into your application? Contact our team to discuss partnership opportunities and get early access to the dashboard.</p>
+                <p style="margin-top: 1rem;"><strong>Email:</strong> partners@streamingtools.com</p>
+            </div>
         </div>
-        <div class="info-box">
-            <h3>Services Enabled</h3>
+    <?php else: ?>
+        <!-- Public landing page -->
+        <div class="container">
+            <div class="logo"><i class="fas fa-lock"></i></div>
+            <h1>StreamersConnect</h1>
+            <p class="subtitle">Authentication Service for StreamingTools Services</p>
+            <a href="?login=streamersconnect.com&service=twitch&scopes=user:read:email&return_url=https://streamersconnect.com/dashboard.php" class="btn">
+                <i class="fab fa-twitch"></i> Login with Twitch
+            </a>
+            <div class="info-box">
+                <h3>How It Works</h3>
+                <p>StreamersConnect provides centralized OAuth authentication for our family of streaming services and authorized partner applications.</p>
+            </div>
+            <div class="info-box">
+                <h3>Services Enabled</h3>
+                <ul class="feature-list">
+                    <li><i class="fab fa-twitch"></i> Twitch</li>
+                    <li><i class="fab fa-discord"></i> Discord</li>
+                </ul>
+            </div>
             <ul class="feature-list">
-                <li><i class="fab fa-twitch"></i> Twitch</li>
-                <li><i class="fab fa-discord"></i> Discord</li>
+                <li>Centralized OAuth</li>
+                <li>Secure token management</li>
+                <li>Multi-service support</li>
+                <li>Partner integration ready</li>
             </ul>
+            <div class="info-box">
+                <h3>For Authorized Services</h3>
+                <p><strong>Integration:</strong><br>
+                Contact the StreamingTools team for access credentials and integration documentation.</p>
+                <p><strong>Custom OAuth Applications:</strong><br>
+                Use your own OAuth credentials by including headers:<br>
+                <code>X-OAuth-Client-ID</code> and <code>X-OAuth-Client-Secret</code><br>
+                If not provided, defaults to StreamersConnect shared credentials.</p>
+            </div>
+            <div class="footer">
+                <p>&copy; <?php echo date('Y'); ?> StreamersConnect - Part of the StreamingTools Ecosystem</p>
+            </div>
         </div>
-        <ul class="feature-list">
-            <li>Centralized OAuth</li>
-            <li>Secure token management</li>
-            <li>Multi-service support</li>
-            <li>Partner integration ready</li>
-        </ul>
-        <div class="info-box">
-            <h3>For Authorized Services</h3>
-            <p><strong>Integration:</strong><br>
-            Contact the StreamingTools team for access credentials and integration documentation.</p>
-            <p><strong>Custom OAuth Applications:</strong><br>
-            Use your own OAuth credentials by including headers:<br>
-            <code>X-OAuth-Client-ID</code> and <code>X-OAuth-Client-Secret</code><br>
-            If not provided, defaults to StreamersConnect shared credentials.</p>
-        </div>
-        <div class="footer">
-            <p>&copy; <?php echo date('Y'); ?> StreamersConnect - Part of the StreamingTools Ecosystem</p>
-        </div>
-    </div>
+    <?php endif; ?>
 </body>
 </html>
