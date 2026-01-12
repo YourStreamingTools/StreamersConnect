@@ -115,13 +115,12 @@ function buildDiscordAuthUrl($scopes, $customClientId = null) {
 <body>
     <?php if (isset($_SESSION['user_id'])): ?>
         <!-- Partner Dashboard - Coming Soon -->
-        <div class="container">
-            <div class="header">
-                <div>
-                    <div class="logo"><i class="fas fa-lock"></i></div>
-                    <h1>StreamersConnect</h1>
-                </div>
-                <a href="?logout=1" class="btn btn-logout">Logout</a>
+        <div class="container container-dark">
+            <div class="logo"><i class="fas fa-lock"></i></div>
+            <h1>StreamersConnect</h1>
+            <p class="subtitle">Partner Portal</p>
+            <div style="display: flex; gap: 10px; justify-content: center; margin-bottom: 2rem;">
+                <a href="?logout=1" class="btn btn-logout" style="margin: 0;">Logout</a>
             </div>
             <div class="info-box">
                 <h3><i class="fas fa-user"></i> Welcome, <?php echo htmlspecialchars($_SESSION['user_display_name']); ?>!</h3>
@@ -137,6 +136,9 @@ function buildDiscordAuthUrl($scopes, $customClientId = null) {
                     <li><i class="fas fa-bell"></i> Webhook Management</li>
                     <li><i class="fas fa-shield-alt"></i> Security & Compliance Tools</li>
                 </ul>
+                <a href="dashboard.php" class="btn" style="margin-top: 1rem; background: #ffffff; color: #1a202c; display: inline-block; font-weight: bold;">
+                    <i class="fas fa-eye"></i> Preview Dashboard (Non-Functional)
+                </a>
             </div>
             <div class="info-box">
                 <h3><i class="fas fa-handshake"></i> Become a Partner</h3>
@@ -146,7 +148,7 @@ function buildDiscordAuthUrl($scopes, $customClientId = null) {
         </div>
     <?php else: ?>
         <!-- Public landing page -->
-        <div class="container">
+        <div class="container container-dark">
             <div class="logo"><i class="fas fa-lock"></i></div>
             <h1>StreamersConnect</h1>
             <p class="subtitle">Authentication Service for StreamingTools Services</p>

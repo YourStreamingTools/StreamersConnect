@@ -24,6 +24,100 @@ body {
     text-align: center;
 }
 
+.container-wide {
+    background: #1a202c;
+    border-radius: 12px;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+    padding: 40px;
+    max-width: 90%;
+    width: 100%;
+    text-align: center;
+}
+
+.container-wide h1 {
+    color: #ffffff;
+}
+
+.container-wide .subtitle {
+    color: #cbd5e0;
+}
+
+.container-wide .info-box {
+    background: #2d3748;
+    border-left-color: #667eea;
+}
+
+.container-wide .info-box h3 {
+    color: #a0aec0;
+}
+
+.container-wide .info-box p {
+    color: #cbd5e0;
+}
+
+.container-wide .footer {
+    border-top-color: #4a5568;
+    color: #718096;
+}
+
+/* Dark theme for nested elements in wide container */
+.container-wide .info-box > div {
+    background: #1a202c !important;
+}
+
+.container-wide .info-box h4 {
+    color: #a0aec0 !important;
+}
+
+.container-wide .info-box label {
+    color: #cbd5e0 !important;
+}
+
+.container-wide .info-box input[type="text"] {
+    background: #2d3748 !important;
+    color: #cbd5e0 !important;
+    border-color: #4a5568 !important;
+}
+
+.container-wide .info-box input[type="text"]::placeholder {
+    color: #718096 !important;
+}
+
+.container-wide .info-box button {
+    background: #4a5568 !important;
+    color: #a0aec0 !important;
+}
+
+/* Dark theme for regular container */
+.container-dark {
+    background: #1a202c;
+}
+
+.container-dark h1 {
+    color: #ffffff;
+}
+
+.container-dark .subtitle {
+    color: #cbd5e0;
+}
+
+.container-dark .info-box {
+    background: #2d3748;
+    border-left-color: #667eea;
+}
+
+.container-dark .info-box h3 {
+    color: #a0aec0;
+}
+
+.container-dark .info-box p {
+    color: #cbd5e0;
+}
+
+.container-dark .feature-list li {
+    color: #cbd5e0;
+}
+
 h1 {
     color: #333;
     margin-bottom: 10px;
@@ -119,26 +213,26 @@ h1 {
 
 /* Partner Dashboard Styles */
 .dashboard-highlight {
-    background: linear-gradient(135deg, #4a148c 0%, #311b92 100%);
+    background: linear-gradient(135deg, #4a148c 0%, #311b92 100%) !important;
     color: #ffffff;
-    border: none;
+    border: none !important;
     text-shadow: 0 1px 2px rgba(0,0,0,0.3);
 }
 
 .dashboard-highlight h3 {
-    color: #ffffff;
+    color: #ffffff !important;
 }
 
 .dashboard-highlight p {
-    color: #ffffff;
+    color: #ffffff !important;
 }
 
 .dashboard-highlight .feature-list li {
-    color: #ffffff;
+    color: #ffffff !important;
 }
 
 .dashboard-highlight .feature-list li:before {
-    color: #ffffff;
+    color: #ffffff !important;
 }
 
 /* Button Styles */
