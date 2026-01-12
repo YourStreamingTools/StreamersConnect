@@ -20,6 +20,7 @@ define('DISCORD_CLIENT_SECRET', 'your_discord_client_secret_here');
 // Your StreamersConnect domain
 define('STREAMERS_CONNECT_DOMAIN', 'streamersconnect.com');
 define('REDIRECT_URI', 'https://' . STREAMERS_CONNECT_DOMAIN . '/callback.php');
+define('INTERNAL_DASHBOARD_URL', 'https://' . STREAMERS_CONNECT_DOMAIN . '/dashboard.php');
 
 // Whitelist of allowed domains that can use this auth service
 // Add all your domains here for security
