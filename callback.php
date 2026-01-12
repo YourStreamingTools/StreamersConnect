@@ -76,10 +76,9 @@ if (isset($_GET['code']) && isset($_GET['state'])) {
     unset($_SESSION['oauth_state'], $_SESSION['return_url'], $_SESSION['origin_domain'], $_SESSION['requested_scopes'], $_SESSION['auth_service'], $_SESSION['custom_client_id'], $_SESSION['custom_client_secret']);
     // Encode the data as JWT or encrypted string (for production, use proper encryption)
     $encodedData = base64_encode(json_encode($returnData));
-    // Redirect back to the originating service with the auth data
+    // Build redirect URL
     $separator = strpos($returnUrl, '?') !== false ? '&' : '?';
-    header('Location: ' . $returnUrl . $separator . 'auth_data=' . urlencode($encodedData));
-    exit;
+    $redirectUrl = $returnUrl . $separator . 'auth_data=' . urlencode($encodedData);
 }
 
 // Handle OAuth errors
@@ -220,8 +219,15 @@ function getDiscordUserData($accessToken) {
 <body>
     <div class="loader">
         <div class="spinner"></div>
-        <h2>Processing Authentication...</h2>
-        <p>Please wait while we redirect you back to your service.</p>
+        <h2><?php echo isset($redirectUrl) ? 'Authentication Successful!' : 'Processing Authentication...'; ?></h2>
+        <p><?php echo isset($redirectUrl) ? 'Redirecting you back to your service...' : 'Please wait while we redirect you back to your service.'; ?></p>
     </div>
+    <?php if (isset($redirectUrl)): ?>
+    <script>
+        setTimeout(function() {
+            window.location.href = <?php echo json_encode($redirectUrl); ?>;
+        }, 2000);
+    </script>
+    <?php endif; ?>
 </body>
 </html>
