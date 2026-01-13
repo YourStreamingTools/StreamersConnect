@@ -8,51 +8,84 @@ StreamersConnect acts as a central authentication hub that handles Twitch OAuth 
 
 ## 🚀 Features
 
-- **Centralized OAuth Management**: Handle Twitch authentication in one place
+- **Centralized OAuth Management**: Handle Twitch & Discord authentication in one place
 - **Multi-Service Support**: Support multiple authorized domains/services with one auth system
 - **Secure Token Exchange**: Safely exchange authorization codes for access tokens
 - **Flexible Scopes**: Each service can request different OAuth scopes
-- **Partner Integration**: Simple URL-based API for authorized services
+- **Partner Dashboard**: Self-service portal for managing OAuth apps, domains, and webhooks
+- **Custom OAuth Applications**: Partners can use their own Twitch/Discord OAuth apps
+- **Domain Whitelist Management**: Add and manage authorized domains through the dashboard
+- **Webhook Notifications**: Real-time notifications for authentication events
+- **Analytics & Monitoring**: Track authentication activity across all your domains
 
 ## 📋 Prerequisites
 
 - PHP 7.4 or higher
 - cURL extension enabled
 - HTTPS enabled (required for OAuth)
-- Twitch Developer Application (managed by StreamingTools team)
-- Domain whitelist approval for integration
+- Partner dashboard access (whitelisted Twitch account)
+- Twitch/Discord Developer Application (can use your own or default shared app)
 
-## 🔧 Setup
+## 🔧 Setup for Partners
 
-### 1. Configure Twitch Application
+### 1. Get Dashboard Access
 
-The Twitch application is managed by the StreamingTools team.
-The OAuth Redirect URL is configured as: `https://streamersconnect.com/callback.php`
+Contact the StreamingTools team to have your Twitch account whitelisted for dashboard access at:
+`https://streamersconnect.com/dashboard.php`
 
-### 2. Configure StreamersConnect
+### 2. Configure Your OAuth Application (Optional)
 
-**For StreamingTools Team:**
+You have two options:
 
-1. Copy `config.example.php` to `config.php`
-2. Fill in your Twitch Client ID and Client Secret
-3. Add all allowed domains to the whitelist
-4. Update the domain name if not using `streamersconnect.com`
+#### Option A: Use Default Shared OAuth App
 
-### 3. Update index.php and callback.php
+- No configuration needed
+- Shared across all partners
+- Fastest to get started
 
-Replace the configuration constants in both files with your actual credentials, or better yet, include the config file:
+#### Option B: Use Your Own OAuth App
 
-```php
-require_once 'config.php';
-```
+1. Create a Twitch/Discord Developer Application
+2. Set redirect URL to: `https://streamersconnect.com/callback.php`
+3. Add your Client ID and Secret in the dashboard
+4. Assign it to specific domains or set as default
+
+### 3. Add Your Domains
+
+In the dashboard:
+
+1. Navigate to "Allowed Domains Management"
+2. Click "Add New Domain"
+3. Enter your domain (e.g., `yourdomain.com`)
+4. Optionally assign a specific OAuth app
+5. Add notes for reference
+
+### 4. Configure OAuth Scopes
+
+Customize which scopes your service requests:
+
+- **Twitch Scopes**: Default or custom scope list
+- **Discord Scopes**: Default or custom scope list
+
+### 5. Set Up Webhooks (Optional)
+
+Receive real-time notifications for authentication events:
+
+1. Navigate to "Webhook Management"
+2. Click "Add Webhook"
+3. Enter webhook URL and name
+4. Generate or provide a secret for verification
+5. Select events to receive (success/failure)
 
 ## 💻 Integration Guide
 
 ### For Authorized Services
 
-**Note:** Your domain must be added to the whitelist by the StreamingTools team before integration.
+**Note:** Add your domain through the partner dashboard before integration.
 
-### From Your Service (e.g., botofthespecter.com)
+### Authentication Flow
+
+#### From Your Service (e.g., yourdomain.com)
 
 #### Step 1: Redirect to StreamersConnect
 
@@ -67,9 +100,9 @@ $scopes = [
 ];
 
 $authUrl = 'https://streamersconnect.com?' . http_build_query([
-    'login' => 'botofthespecter.com',
+    'login' => 'example.com',
     'scopes' => implode(' ', $scopes),
-    'return_url' => 'https://botofthespecter.com/auth/callback.php' // Optional
+    'return_url' => 'https://example.com/auth/callback.php' // Optional
 ]);
 
 header('Location: ' . $authUrl);
@@ -87,13 +120,11 @@ session_start();
 if (isset($_GET['auth_data'])) {
     $encodedData = $_GET['auth_data'];
     $authData = json_decode(base64_decode($encodedData), true);
-    
     if ($authData && $authData['success']) {
         // Store the authentication data
         $_SESSION['twitch_access_token'] = $authData['access_token'];
         $_SESSION['twitch_refresh_token'] = $authData['refresh_token'];
         $_SESSION['twitch_user'] = $authData['user'];
-        
         // Redirect to your dashboard
         header('Location: /dashboard.php');
         exit;
@@ -113,7 +144,7 @@ if (isset($_GET['error'])) {
 
 | Parameter | Required | Description | Example |
 | --------- | -------- | ----------- | ------- |
-| `login` | Yes | The domain of your service | `botofthespecter.com` |
+| `login` | Yes | The domain of your service | `example.com` |
 | `scopes` | Yes | Space-separated OAuth scopes | `user:read:email chat:read` |
 | `return_url` | No | Custom callback URL | `https://yourdomain.com/callback` |
 
@@ -171,15 +202,17 @@ Your services are responsible for storing tokens and managing user sessions.
 
 ## 🔄 Workflow
 
-1. **User** clicks login on `botofthespecter.com`
-2. **botofthespecter.com** redirects to StreamersConnect with domain and scopes
-3. **StreamersConnect** redirects user to Twitch OAuth
-4. **User** authorizes the application on Twitch
-5. **Twitch** redirects back to StreamersConnect callback
-6. **StreamersConnect** exchanges code for access token
-7. **StreamersConnect** fetches user data from Twitch
-8. **StreamersConnect** redirects back to botofthespecter.com with auth data
-9. **botofthespecter.com** stores the tokens and user data
+1. **User** clicks login on `yourdomain.com`
+2. **yourdomain.com** redirects to StreamersConnect with domain and scopes
+3. **StreamersConnect** selects appropriate OAuth app (default or domain-specific)
+4. **StreamersConnect** redirects user to Twitch/Discord OAuth
+5. **User** authorizes the application
+6. **Twitch/Discord** redirects back to StreamersConnect callback
+7. **StreamersConnect** exchanges code for access token
+8. **StreamersConnect** fetches user data
+9. **StreamersConnect** triggers webhooks (if configured)
+10. **StreamersConnect** redirects back to yourdomain.com with auth data
+11. **yourdomain.com** stores the tokens and user data
 
 ## 📝 Available Twitch Scopes
 
@@ -200,7 +233,8 @@ Common scopes you might need:
 
 ### "Unauthorized domain" error
 
-- Make sure your domain is added to the `$ALLOWED_DOMAINS` array in index.php
+- Make sure your domain is added through the Partner Dashboard
+- Check that the domain matches exactly (no www prefix unless specified)
 
 ### "Invalid state parameter" error
 
@@ -214,56 +248,107 @@ Common scopes you might need:
 - Make sure the redirect URI in Twitch console matches exactly
 - Check that cURL is enabled in PHP
 
-## 📈 Dashboard & Monitoring
+## 📈 Partner Dashboard
 
-StreamersConnect includes a powerful dashboard for monitoring authentication activity across all connected domains.
+StreamersConnect includes a powerful self-service dashboard for partners to manage their integrations.
 
-### Dashboard Access
+### Accessing the Dashboard
 
-The dashboard is available at `https://streamersconnect.com/dashboard.php` after logging in with your Twitch account.
+Login at `https://streamersconnect.com/dashboard.php` with your whitelisted Twitch account.
 
-**Access Levels:**
+### Dashboard Features
 
-- **Whitelisted Users**: Full access to real authentication data and analytics
-- **Regular Users**: Preview mode with placeholder data
+#### 1. OAuth Application Management
 
-### Features for Whitelisted Users
+Manage your own OAuth applications or use the default shared one:
 
-#### Real-time Analytics
+- **Create Applications**: Add Twitch or Discord OAuth apps with your Client ID/Secret
+- **Set Default**: Choose which app to use across all domains
+- **Domain-Specific Apps**: Assign different OAuth apps to different domains
+- **Security**: Client secrets are stored securely and never exposed
+
+##### Benefits of Custom OAuth Apps
+
+- Your own branding in OAuth prompts
+- Independent rate limits
+- Better control and isolation
+- Custom analytics in Twitch/Discord developer dashboards
+
+#### 2. Domain Management
+
+Self-service domain whitelist management:
+
+- **Add Domains**: Whitelist domains that can use your OAuth apps
+- **Assign OAuth Apps**: Use default or specific apps per domain
+- **Notes**: Document why each domain is whitelisted
+- **View Statistics**: See authentication activity per domain
+
+#### 3. Webhook Management
+
+Receive real-time notifications for authentication events:
+
+- **Custom Endpoints**: Set up webhook URLs for your backend
+- **Secure Secrets**: Generate or provide 32-character secrets for verification
+- **Event Selection**: Choose to receive success, failure, or both events
+- **Multiple Webhooks**: Configure different webhooks for different purposes
+
+##### Webhook Payload Example
+
+```json
+{
+  "event": "authentication_success",
+  "timestamp": "2026-01-14T12:34:56Z",
+  "service": "twitch",
+  "domain": "yourdomain.com",
+  "user": {
+    "id": "12345678",
+    "login": "username",
+    "display_name": "Username"
+  }
+}
+```
+
+##### Webhook Verification
+
+Each webhook request includes a `X-StreamersConnect-Signature` header with HMAC-SHA256 signature.
+
+```php
+$signature = hash_hmac('sha256', $requestBody, $webhookSecret);
+if ($signature === $_SERVER['HTTP_X_STREAMERSCONNECT_SIGNATURE']) {
+    // Webhook is authentic
+}
+```
+
+#### 4. Service Configuration
+
+Customize OAuth scopes for your integrations:
+
+- **Twitch Scopes**: Define which permissions to request from Twitch users
+- **Discord Scopes**: Define which permissions to request from Discord users
+- **Easy Updates**: Change scopes without code deployments
+
+#### 5. Analytics & Monitoring
+
+Real-time analytics to track authentication activity:
 
 - **Total Authentications**: Overall count of all authentication attempts
 - **Monthly Stats**: Number of authentications in the current month
 - **Success Rate**: Percentage of successful authentications
-
-#### Domain-Specific Statistics
-
-View authentication breakdown by domain
-
-For each domain see:
-
-- Total authentication count
-- Success rate
-- Last authentication timestamp
-
-#### Recent Activity Log
-
-Monitor the last 20 authentication attempts with:
-
-- Timestamp (relative time: "5m ago", "2h ago")
-- Service (Twitch/Discord)
-- Origin domain
-- Username
-- Success/failure status with error details
+- **Domain Breakdown**: Authentication count and success rate per domain
+- **Recent Activity**: Last 5 authentication attempts with full details
 
 ### Database Structure
 
-StreamersConnect uses a MySQL database to track all authentication activity.
+StreamersConnect uses a MySQL database to manage partners and track activity.
 
 **Tables:**
 
 - `auth_logs` - Every authentication attempt (success/failure)
 - `dashboard_whitelist` - Users with full dashboard access
-- `oauth_applications` - (Future) Partner OAuth applications
+- `oauth_applications` - Partner OAuth applications (Twitch/Discord)
+- `allowed_domains` - Whitelisted domains with OAuth app assignments
+- `webhooks` - Webhook endpoints for event notifications
+- `user_service_config` - Custom OAuth scopes per partner
 
 ### Accessing Statistics
 
@@ -282,17 +367,19 @@ The stats page shows:
 
 ### Managing Whitelist
 
+**For StreamingTools Team:**
+
 To add users to the whitelist, insert directly into the database:
 
 ```sql
-INSERT INTO streamersconnect.dashboard_whitelist (user_login, notes, added_by) 
-VALUES ('username', 'Reason for access', 'admin_name');
+INSERT INTO streamersconnect.dashboard_whitelist (twitch_id, user_login, display_name, email, notes) 
+VALUES ('123456789', 'username', 'DisplayName', 'email@example.com', 'Partner - YourCompany');
 ```
 
 Check current whitelist:
 
 ```sql
-SELECT user_login, notes, created_at FROM streamersconnect.dashboard_whitelist;
+SELECT user_login, display_name, notes, created_at FROM streamersconnect.dashboard_whitelist;
 ```
 
 Remove from whitelist:
@@ -318,10 +405,24 @@ For integration requests or technical support, contact the StreamingTools develo
 To integrate your service with StreamersConnect:
 
 1. Contact the StreamingTools team
-2. Provide your domain(s) for whitelist approval
-3. Review integration documentation and best practices
-4. Receive access credentials and support for implementation
+2. Provide your Twitch account for dashboard whitelist
+3. Receive dashboard access credentials
+4. Configure your OAuth apps and domains through the dashboard
+5. Implement the integration following this documentation
+6. Test in development environment
+7. Launch to production
+
+### Support Resources
+
+- **Dashboard**: Self-service management at `https://streamersconnect.com/dashboard.php`
+- **Documentation**: This README and inline help in the dashboard
+- **Contact**: StreamingTools development team for technical issues
 
 ---
 
-**Note**: Never commit your `config.php` file with real credentials to version control. Always use `config.example.php` as a template.
+**Security Notes:**
+
+- Client secrets are stored securely in the database and never exposed in logs or frontend
+- Webhook secrets should be at least 32 characters with mixed case letters and numbers
+- All OAuth flows use HTTPS and CSRF protection
+- Never commit sensitive credentials to version control
