@@ -96,7 +96,7 @@ $scopes = [
 $authUrl = 'https://streamersconnect.com?' . http_build_query([
     'login' => 'example.com',
     'scopes' => implode(' ', $scopes),
-    'return_url' => 'https://example.com/auth/callback.php'
+    'return_url' => 'https://example.com/auth/callback.php' // Required
 ]);
 
 header('Location: ' . $authUrl);
@@ -105,7 +105,9 @@ exit;
 
 #### Step 2: Handle the Callback
 
-Create `/auth/callback.php` on your service to receive the authentication data:
+Create a callback handler at the URL you specified in `return_url`. StreamersConnect will redirect users back to this URL with authentication data.
+
+**You must provide the `return_url` parameter** in Step 1. Implement your callback handler however you need - this is just a basic example:
 
 ```php
 <?php
@@ -115,18 +117,21 @@ if (isset($_GET['auth_data'])) {
     $encodedData = $_GET['auth_data'];
     $authData = json_decode(base64_decode($encodedData), true);
     if ($authData && $authData['success']) {
-        // Store the authentication data
+        // Implement your own logic here:
+        // - Store tokens in database
+        // - Create user session
+        // - Log authentication
+        // - Redirect to appropriate page
         $_SESSION['twitch_access_token'] = $authData['access_token'];
-        $_SESSION['twitch_refresh_token'] = $authData['refresh_token'];
         $_SESSION['twitch_user'] = $authData['user'];
-        // Redirect to your dashboard
         header('Location: /dashboard.php');
         exit;
     }
 }
 
-// Handle error
+// Handle authentication errors
 if (isset($_GET['error'])) {
+    // Implement your own error handling
     die('Authentication failed: ' . htmlspecialchars($_GET['error_description']));
 }
 ?>
@@ -140,7 +145,7 @@ if (isset($_GET['error'])) {
 | --------- | -------- | ----------- | ------- |
 | `login` | Yes | The domain of your service | `example.com` |
 | `scopes` | Yes | Space-separated OAuth scopes | `user:read:email chat:read` |
-| `return_url` | No | Custom callback URL | `https://yourdomain.com/callback` |
+| `return_url` | Yes | Your callback URL to receive auth data | `https://yourdomain.com/callback` |
 
 ### Response Parameters (returned to your service)
 
