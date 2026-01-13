@@ -96,7 +96,7 @@ $scopes = [
 $authUrl = 'https://streamersconnect.com?' . http_build_query([
     'login' => 'example.com',
     'scopes' => implode(' ', $scopes),
-    'return_url' => 'https://example.com/auth/callback.php' // Optional
+    'return_url' => 'https://example.com/auth/callback.php'
 ]);
 
 header('Location: ' . $authUrl);
