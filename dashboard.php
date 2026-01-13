@@ -20,6 +20,34 @@ if (isset($_GET['logout'])) {
 $userLogin = $_SESSION['user_login'];
 $isWhitelisted = isWhitelistedUser($userLogin);
 // If whitelisted, fetch real data
+$twitchScopes = 'user:read:email';
+$discordScopes = 'identify email guilds';
+if ($isWhitelisted) {
+    $conn = getStreamersConnectDB();
+    if ($conn) {
+        $stmt = $conn->prepare("SELECT twitch_scopes, discord_scopes FROM user_service_config WHERE user_login = ? LIMIT 1");
+        $stmt->bind_param('s', $userLogin);
+        $stmt->execute();
+        $stmt->bind_result($dbTwitch, $dbDiscord);
+        if ($stmt->fetch()) {
+            $twitchScopes = $dbTwitch ?: $twitchScopes;
+            $discordScopes = $dbDiscord ?: $discordScopes;
+        }
+        $stmt->close();
+        // AJAX save handler
+        if (isset($_GET['save']) && $_SERVER['REQUEST_METHOD'] === 'POST') {
+            $newTwitch = trim($_POST['twitch_scopes'] ?? 'user:read:email');
+            $newDiscord = trim($_POST['discord_scopes'] ?? 'identify email guilds');
+            $stmt = $conn->prepare("REPLACE INTO user_service_config (user_login, twitch_scopes, discord_scopes) VALUES (?, ?, ?)");
+            $stmt->bind_param('sss', $userLogin, $newTwitch, $newDiscord);
+            $ok = $stmt->execute();
+            $stmt->close();
+            header('Content-Type: application/json');
+            echo json_encode(['success' => $ok]);
+            exit;
+        }
+    }
+}
 $authStats = null;
 $recentAuths = null;
 $domainStats = null;
@@ -96,6 +124,8 @@ if ($isWhitelisted) {
     <link rel="apple-touch-icon" href="https://cdn.yourstreamingtools.com/img/logo.ico">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.css">
     <link rel="stylesheet" href="custom.css?v=<?php echo filemtime(__DIR__ . '/custom.css'); ?>">
+    <!-- Toastify CSS -->
+    <link rel="stylesheet" type="text/css" href="https://cdn.jsdelivr.net/npm/toastify-js/src/toastify.min.css">
 </head>
 <body>
     <div class="container container-wide">
@@ -266,19 +296,33 @@ if ($isWhitelisted) {
             </div>
         </div>
         <?php endif; ?>
-        <!-- Service Configuration Preview -->
+        <!-- Service Configuration -->
         <div class="info-box">
             <h3><i class="fas fa-cog"></i> Service Configuration</h3>
             <p class="info-text-white">Configure your authentication services and scopes.</p>
+            <?php if ($isWhitelisted): ?>
+            <form id="serviceConfigForm" method="post" style="margin-bottom:0;">
                 <div class="mb-15">
-                <label class="label-white"><i class="fab fa-twitch service-twitch"></i> Twitch Scopes</label>
-                <input type="text" disabled value="user:read:email channel:read:subscriptions" class="input-disabled">
-            </div>
+                    <label class="label-white"><i class="fab fa-twitch service-twitch"></i> Twitch Scopes</label>
+                    <input type="text" name="twitch_scopes" id="twitch_scopes" value="<?php echo htmlspecialchars($twitchScopes); ?>" class="input-disabled" style="background:#fff;color:#1a202c;" autocomplete="off">
+                </div>
                 <div class="mb-15">
-                <label class="label-white"><i class="fab fa-discord service-discord"></i> Discord Scopes</label>
-                <input type="text" disabled value="identify email guilds" class="input-disabled">
-            </div>
-            <button disabled class="btn-disabled">Save Configuration (Coming Soon)</button>
+                    <label class="label-white"><i class="fab fa-discord service-discord"></i> Discord Scopes</label>
+                    <input type="text" name="discord_scopes" id="discord_scopes" value="<?php echo htmlspecialchars($discordScopes); ?>" class="input-disabled" style="background:#fff;color:#1a202c;" autocomplete="off">
+                </div>
+                <button type="submit" class="btn bg-primary">Save Configuration</button>
+            </form>
+            <?php else: ?>
+                <div class="mb-15">
+                    <label class="label-white"><i class="fab fa-twitch service-twitch"></i> Twitch Scopes</label>
+                    <input type="text" disabled value="user:read:email" class="input-disabled">
+                </div>
+                <div class="mb-15">
+                    <label class="label-white"><i class="fab fa-discord service-discord"></i> Discord Scopes</label>
+                    <input type="text" disabled value="identify email guilds" class="input-disabled">
+                </div>
+                <button disabled class="btn-disabled">Save Configuration (Coming Soon)</button>
+            <?php endif; ?>
         </div>
         <!-- Webhook Management Preview -->
         <div class="info-box">
@@ -310,11 +354,42 @@ if ($isWhitelisted) {
             <p>&copy; <?php echo date('Y'); ?> StreamersConnect - Part of the StreamingTools Ecosystem</p>
         </div>
     </div>
+<script src="https://cdn.jsdelivr.net/npm/toastify-js"></script>
 <script>
-// Display relative time using browser's timezone
+// AJAX save for service config
+document.addEventListener('DOMContentLoaded', function() {
+    var form = document.getElementById('serviceConfigForm');
+    if (form) {
+        form.addEventListener('submit', function(e) {
+            e.preventDefault();
+            var data = new FormData(form);
+            fetch('?save=1', {
+                method: 'POST',
+                body: data
+            })
+            .then(r => r.json())
+            .then(res => {
+                Toastify({
+                    text: res.success ? "Service configuration saved!" : "Save failed.",
+                    duration: 3000,
+                    gravity: "top",
+                    position: "right",
+                    backgroundColor: res.success ? "#48bb78" : "#ef4444",
+                    stopOnFocus: true
+                }).showToast();
+            });
+        });
+    }
+    // Display relative time using browser's timezone
+    document.querySelectorAll('.js-timeago').forEach(function(el) {
+        const iso = el.getAttribute('data-iso');
+        if (iso) {
+            el.textContent = timeAgoJS(iso);
+        }
+    });
+});
 function timeAgoJS(dateString) {
     const now = new Date();
-    // If dateString is already ISO, this will work. If not, add 'Z' to treat as UTC.
     let then = new Date(dateString);
     if (isNaN(then.getTime())) {
         then = new Date(dateString + 'Z');
@@ -327,14 +402,6 @@ function timeAgoJS(dateString) {
     if (diff < 86400) return Math.floor(diff / 3600) + 'h ago';
     return Math.floor(diff / 86400) + 'd ago';
 }
-document.addEventListener('DOMContentLoaded', function() {
-    document.querySelectorAll('.js-timeago').forEach(function(el) {
-        const iso = el.getAttribute('data-iso');
-        if (iso) {
-            el.textContent = timeAgoJS(iso);
-        }
-    });
-});
 </script>
 </body>
 </html>

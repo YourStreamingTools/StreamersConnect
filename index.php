@@ -40,7 +40,11 @@ if (isset($_GET['service']) && isset($_GET['login']) && isset($_GET['scopes'])) 
     // Get and validate parameters
     $service = strtolower(filter_var($_GET['service'], FILTER_SANITIZE_STRING));
     $originDomain = filter_var($_GET['login'], FILTER_SANITIZE_STRING);
-    $requestedScopes = filter_var($_GET['scopes'], FILTER_SANITIZE_STRING);
+    // Set default Twitch scope if none provided
+    $requestedScopes = isset($_GET['scopes']) && trim($_GET['scopes']) !== '' ? filter_var($_GET['scopes'], FILTER_SANITIZE_STRING) : null;
+    if ($service === 'twitch' && (!$requestedScopes || $requestedScopes === '')) {
+        $requestedScopes = 'user:read:email';
+    }
     // Check for custom OAuth credentials in headers
     $customClientId = $_SERVER['HTTP_X_OAUTH_CLIENT_ID'] ?? null;
     $customClientSecret = $_SERVER['HTTP_X_OAUTH_CLIENT_SECRET'] ?? null;
