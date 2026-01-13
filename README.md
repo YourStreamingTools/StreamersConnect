@@ -24,7 +24,7 @@ StreamersConnect acts as a central authentication hub that handles Twitch OAuth 
 - cURL extension enabled
 - HTTPS enabled (required for OAuth)
 - Partner dashboard access (whitelisted Twitch account)
-- Twitch/Discord Developer Application
+- Twitch and/or Discord Developer Application (required)
 
 ## 🔧 Setup for Partners
 
@@ -33,22 +33,16 @@ StreamersConnect acts as a central authentication hub that handles Twitch OAuth 
 Contact the StreamingTools team to have your Twitch account whitelisted for dashboard access at:
 `https://streamersconnect.com/dashboard.php`
 
-### 2. Configure Your OAuth Application (Optional)
+### 2. Create Your OAuth Application
 
-You have two options:
+You must create your own Twitch and/or Discord OAuth application:
 
-#### Option A: Use Default Shared OAuth App
-
-- No configuration needed
-- Shared across all partners
-- Fastest to get started
-
-#### Option B: Use Your Own OAuth App
-
-1. Create a Twitch/Discord Developer Application
-2. Set redirect URL to: `https://streamersconnect.com/callback.php`
-3. Add your Client ID and Secret in the dashboard
-4. Assign it to specific domains or set as default
+1. Create a Twitch Developer Application at: <https://dev.twitch.tv/console/apps>
+2. Create a Discord Application at: <https://discord.com/developers/applications> (if using Discord)
+3. Set redirect URL to: `https://streamersconnect.com/callback.php`
+4. Copy your Client ID and Client Secret
+5. Add them in the StreamersConnect dashboard under "OAuth Application Management"
+6. You can set one app as default for all domains, or assign specific apps to specific domains
 
 ### 3. Add Your Domains
 
@@ -64,8 +58,8 @@ In the dashboard:
 
 Customize which scopes your service requests:
 
-- **Twitch Scopes**: Default or custom scope list
-- **Discord Scopes**: Default or custom scope list
+- **Twitch Scopes**: Define required permissions (default: `user:read:email`)
+- **Discord Scopes**: Define required permissions (default: `identify email guilds`)
 
 ### 5. Set Up Webhooks (Optional)
 
@@ -204,7 +198,7 @@ Your services are responsible for storing tokens and managing user sessions.
 
 1. **User** clicks login on `yourdomain.com`
 2. **yourdomain.com** redirects to StreamersConnect with domain and scopes
-3. **StreamersConnect** selects appropriate OAuth app (default or domain-specific)
+3. **StreamersConnect** selects appropriate OAuth app (your default or domain-specific)
 4. **StreamersConnect** redirects user to Twitch/Discord OAuth
 5. **User** authorizes the application
 6. **Twitch/Discord** redirects back to StreamersConnect callback
@@ -260,7 +254,7 @@ Login at `https://streamersconnect.com/dashboard.php` with your whitelisted Twit
 
 #### 1. OAuth Application Management
 
-Manage your own OAuth applications or use the default shared one:
+Manage your OAuth applications (required):
 
 - **Create Applications**: Add Twitch or Discord OAuth apps with your Client ID/Secret
 - **Set Default**: Choose which app to use across all domains
@@ -279,7 +273,7 @@ Manage your own OAuth applications or use the default shared one:
 Self-service domain whitelist management:
 
 - **Add Domains**: Whitelist domains that can use your OAuth apps
-- **Assign OAuth Apps**: Use default or specific apps per domain
+- **Assign OAuth Apps**: Select which OAuth app each domain uses
 - **Notes**: Document why each domain is whitelisted
 - **View Statistics**: See authentication activity per domain
 
