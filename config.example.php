@@ -5,18 +5,6 @@
  * Copy this structure to your server's config directory and fill in your credentials.
  */
 
-// Twitch Application Credentials
-// Get these from https://dev.twitch.tv/console/apps
-// Create a new application and set the OAuth Redirect URL to: https://yourdomain.com/callback.php
-define('TWITCH_CLIENT_ID', 'your_twitch_client_id_here');
-define('TWITCH_CLIENT_SECRET', 'your_twitch_client_secret_here');
-
-// Discord Application Credentials
-// Get these from https://discord.com/developers/applications
-// Create a new application, go to OAuth2 settings, and add redirect URL: https://yourdomain.com/callback.php
-define('DISCORD_CLIENT_ID', 'your_discord_client_id_here');
-define('DISCORD_CLIENT_SECRET', 'your_discord_client_secret_here');
-
 // Your StreamersConnect domain
 define('STREAMERS_CONNECT_DOMAIN', 'streamersconnect.com');
 define('REDIRECT_URI', 'https://' . STREAMERS_CONNECT_DOMAIN . '/callback.php');
@@ -64,6 +52,30 @@ function getStreamersConnectDB() {
         }
     }
     return $conn;
+}
+
+/**
+ * Get default OAuth credentials for a service from database
+ */
+function getDefaultOAuthCredentials($service, $twitchId = null) {
+    $conn = getStreamersConnectDB();
+    if ($conn && $twitchId) {
+        // Get user's default OAuth app
+        $stmt = $conn->prepare("SELECT client_id, client_secret FROM oauth_applications WHERE user_login IN (SELECT user_login FROM dashboard_whitelist WHERE twitch_id = ?) AND service = ? AND is_default = 1 LIMIT 1");
+        $stmt->bind_param("ss", $twitchId, $service);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        if ($row = $result->fetch_assoc()) {
+            $stmt->close();
+            return [
+                'client_id' => $row['client_id'],
+                'client_secret' => $row['client_secret']
+            ];
+        }
+        $stmt->close();
+    }
+    
+    return false;
 }
 
 /**
