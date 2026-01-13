@@ -41,4 +41,87 @@ define('LOG_FILE', __DIR__ . '/logs/auth.log');
 // Optional: Rate limiting
 define('ENABLE_RATE_LIMITING', false);
 define('MAX_REQUESTS_PER_IP', 10); // per minute
+
+// Database Configuration
+define('STREAMERSCONNECT_DB_HOST', 'your_db_host_here'); // Usually 'localhost'
+define('STREAMERSCONNECT_DB_USER', 'your_db_user_here');
+define('STREAMERSCONNECT_DB_PASS', 'your_db_password_here');
+define('STREAMERSCONNECT_DB_NAME', 'streamersconnect');
+
+/**
+ * Get database connection for StreamersConnect
+ */
+function getStreamersConnectDB() {
+    static $conn = null;
+    if ($conn === null) {
+        try {
+            $conn = new mysqli(
+                STREAMERSCONNECT_DB_HOST,
+                STREAMERSCONNECT_DB_USER,
+                STREAMERSCONNECT_DB_PASS,
+                STREAMERSCONNECT_DB_NAME
+            );
+            if ($conn->connect_error) {
+                error_log('StreamersConnect DB Connection failed: ' . $conn->connect_error);
+                return false;
+            }
+            $conn->set_charset('utf8mb4');
+        } catch (Exception $e) {
+            error_log('StreamersConnect DB Exception: ' . $e->getMessage());
+            return false;
+        }
+    }
+    return $conn;
+}
+
+/**
+ * Check if user is whitelisted for dashboard access
+ */
+function isWhitelistedUser($userLogin) {
+    $conn = getStreamersConnectDB();
+    if (!$conn) return false;
+    $stmt = $conn->prepare("SELECT id FROM dashboard_whitelist WHERE user_login = ?");
+    $stmt->bind_param("s", $userLogin);
+    $stmt->execute();
+    $result = $stmt->get_result();
+    $isWhitelisted = $result->num_rows > 0;
+    $stmt->close();
+    
+    return $isWhitelisted;
+}
+
+/**
+ * Log authentication attempt
+ */
+function logAuthAttempt($service, $originDomain, $userData, $requestedScopes, $success, $errorMessage = null) {
+    $conn = getStreamersConnectDB();
+    if (!$conn) return false;
+    $userId = $userData['id'] ?? null;
+    $userLogin = $userData['login'] ?? null;
+    $userDisplayName = $userData['display_name'] ?? null;
+    $userEmail = $userData['email'] ?? null;
+    $ipAddress = $_SERVER['REMOTE_ADDR'] ?? null;
+    $userAgent = $_SERVER['HTTP_USER_AGENT'] ?? null;
+    $stmt = $conn->prepare(
+        "INSERT INTO auth_logs (service, origin_domain, user_id, user_login, user_display_name, user_email, requested_scopes, success, error_message, ip_address, user_agent) 
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+    );
+    $stmt->bind_param(
+        "sssssssssss",
+        $service,
+        $originDomain,
+        $userId,
+        $userLogin,
+        $userDisplayName,
+        $userEmail,
+        $requestedScopes,
+        $success,
+        $errorMessage,
+        $ipAddress,
+        $userAgent
+    );
+    $result = $stmt->execute();
+    $stmt->close();
+    return $result;
+}
 ?>
