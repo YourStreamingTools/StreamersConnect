@@ -48,6 +48,126 @@
 .btn-edit:hover {
     background: linear-gradient(90deg, #059669 0%, #0ea5e9 100%) !important;
 }
+
+/* OAuth Help Modal */
+#oauthHelpModal .modal-card {
+    width: 90% !important;
+    max-width: 1200px !important;
+}
+
+#oauthHelpModal .modal-card-body {
+    color: #fff !important;
+    background: #1a202c !important;
+    text-align: left !important;
+}
+
+#oauthHelpModal .content {
+    color: #fff !important;
+    text-align: left !important;
+}
+
+#oauthHelpModal .content h4 {
+    color: #667eea !important;
+    margin-top: 1.5rem !important;
+    margin-bottom: 1rem !important;
+    font-weight: 600 !important;
+    font-size: 1.2em !important;
+    text-align: left !important;
+}
+
+#oauthHelpModal .content h4:first-of-type {
+    margin-top: 0 !important;
+}
+
+#oauthHelpModal .content p {
+    color: #e2e8f0 !important;
+    line-height: 1.6 !important;
+    margin-bottom: 1rem !important;
+    text-align: left !important;
+}
+
+#oauthHelpModal .content ol {
+    color: #e2e8f0 !important;
+    padding-left: 0 !important;
+    list-style: none !important;
+    margin-left: 0 !important;
+    text-align: left !important;
+}
+
+#oauthHelpModal .content ol > li {
+    margin-bottom: 1.5rem !important;
+    padding-left: 0 !important;
+    text-align: left !important;
+}
+
+#oauthHelpModal .content ol > li > strong {
+    color: #fff !important;
+    font-size: 1.05em !important;
+    display: block !important;
+    margin-bottom: 0.5rem !important;
+    text-align: left !important;
+}
+
+#oauthHelpModal .content ul {
+    margin-top: 0.5rem !important;
+    padding-left: 0 !important;
+    list-style: none !important;
+    margin-left: 1rem !important;
+    text-align: left !important;
+}
+
+#oauthHelpModal .content ul > li {
+    margin-bottom: 0.5rem !important;
+    color: #cbd5e0 !important;
+    line-height: 1.5 !important;
+    text-align: left !important;
+}
+
+#oauthHelpModal .content strong {
+    color: #fff !important;
+}
+
+#oauthHelpModal .content code {
+    background: #2d2d2d !important;
+    color: #a5f3fc !important;
+    padding: 3px 8px !important;
+    border-radius: 4px !important;
+    font-family: 'Courier New', monospace !important;
+    font-size: 0.9em !important;
+}
+
+#oauthHelpModal .content li.url-code {
+    font-family: 'Courier New', monospace !important;
+    font-size: 0.8em !important;
+    word-break: break-all !important;
+    background: #2d2d2d !important;
+    color: #a5f3fc !important;
+    padding: 10px 12px !important;
+    border-radius: 4px !important;
+    display: block !important;
+    margin: 0.5rem 0 0.5rem 1rem !important;
+    border-left: 3px solid #667eea !important;
+    text-align: left !important;
+}
+
+#oauthHelpModal .content pre {
+    background: #0d1117 !important;
+    padding: 18px !important;
+    border-radius: 6px !important;
+    color: #f8f8f2 !important;
+    overflow-x: auto !important;
+    font-size: 0.85em !important;
+    margin: 1rem 0 !important;
+    border: 1px solid #30363d !important;
+    text-align: left !important;
+}
+
+#oauthHelpModal .content pre code {
+    background: none !important;
+    padding: 0 !important;
+    color: #f8f8f2 !important;
+}
+
 .btn-delete {
     background: linear-gradient(90deg, #ef4444 0%, #f59e42 100%) !important;
     color: #fff !important;

@@ -470,7 +470,7 @@ if ($isWhitelisted) {
                         <h4><i class="fas fa-list-ol"></i> Setup Steps</h4>
                         <ol>
                             <li>
-                                <strong>Create an OAuth Application:</strong>
+                                <strong>1. Create an OAuth Application:</strong>
                                 <ul>
                                     <li>Click "Create New Application" button</li>
                                     <li>Choose service (Twitch or Discord)</li>
@@ -481,25 +481,25 @@ if ($isWhitelisted) {
                                 </ul>
                             </li>
                             <li>
-                                <strong>Add Your Domain:</strong>
+                                <strong>2. Add Your Domain:</strong>
                                 <ul>
                                     <li>Go to "Allowed Domains" section below</li>
-                                    <li>Add your website domain (e.g., yourchat.botofthespecter.com)</li>
+                                    <li>Add your website domain (e.g., example.com)</li>
                                     <li>Optionally assign a specific OAuth app to this domain</li>
                                 </ul>
                             </li>
                             <li>
-                                <strong>Integrate Into Your Website:</strong>
+                                <strong>3. Integrate Into Your Website:</strong>
                                 <ul>
                                     <li>Use this URL format to start authentication:</li>
-                                    <li><code style="font-size: 0.85em; word-break: break-all;">https://streamersconnect.com/?service=twitch&login=YOUR_DOMAIN&scopes=user:read:email&return_url=https://YOUR_DOMAIN/callback</code></li>
+                                    <li class="url-code">https://streamersconnect.com/?service=twitch&login=YOUR_DOMAIN&scopes=user:read:email&return_url=https://YOUR_DOMAIN/callback</li>
                                     <li>Replace <code>YOUR_DOMAIN</code> with your actual domain</li>
                                     <li>Replace <code>scopes</code> with the permissions you need</li>
                                     <li>Replace <code>return_url</code> with where users should return after authentication</li>
                                 </ul>
                             </li>
                             <li>
-                                <strong>Handle the Response:</strong>
+                                <strong>4. Handle the Response:</strong>
                                 <ul>
                                     <li>Users will be redirected back to your <code>return_url</code> with an <code>auth_data</code> parameter</li>
                                     <li>Decode the base64 auth_data to get user information and access tokens</li>
@@ -508,8 +508,8 @@ if ($isWhitelisted) {
                             </li>
                         </ol>
                         <h4><i class="fas fa-code"></i> Example Integration</h4>
-                        <pre style="background: #2d2d2d; padding: 15px; border-radius: 5px; color: #f8f8f2; overflow-x: auto; font-size: 0.85em;"><code>&lt;!-- Login Button --&gt;
-&lt;a href="https://streamersconnect.com/?service=twitch&login=yourchat.botofthespecter.com&scopes=user:read:email&return_url=https://yourchat.botofthespecter.com/auth" class="btn"&gt;
+                        <pre><code>&lt;!-- Login Button --&gt;
+&lt;a href="https://streamersconnect.com/?service=twitch&login=example.com&scopes=user:read:email&return_url=https://example.com/callback" class="btn"&gt;
     Login with Twitch
 &lt;/a&gt;
 
