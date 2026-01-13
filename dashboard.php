@@ -264,8 +264,16 @@ if ($isWhitelisted) {
                     $stmt = $conn->prepare("UPDATE webhooks SET name = ?, webhook_url = ?, event_success = ?, event_failure = ? WHERE id = ? AND twitch_id = ?");
                     $stmt->bind_param('ssiiis', $name, $webhookUrl, $eventSuccess, $eventFailure, $id, $twitchId);
                 } else {
-                    // Insert - generate a new secret
-                    $secret = bin2hex(random_bytes(32));
+                    // Insert - use provided secret or generate one
+                    $secret = trim($_POST['secret'] ?? '');
+                    if (empty($secret)) {
+                        $secret = bin2hex(random_bytes(32));
+                    }
+                    // Validate secret length (max 64 characters)
+                    if (strlen($secret) > 64) {
+                        echo json_encode(['success' => false, 'message' => 'Secret must be 64 characters or less']);
+                        exit;
+                    }
                     $stmt = $conn->prepare("INSERT INTO webhooks (twitch_id, user_login, name, webhook_url, secret, event_success, event_failure) VALUES (?, ?, ?, ?, ?, ?, ?)");
                     $stmt->bind_param('sssssii', $twitchId, $userLogin, $name, $webhookUrl, $secret, $eventSuccess, $eventFailure);
                 }
@@ -1148,13 +1156,13 @@ if (isset($_GET['auth_data'])) {
             document.getElementById('modalWebhookUrl').value = (webhook && webhook.webhook_url) ? webhook.webhook_url : '';
             document.getElementById('modalEventSuccess').checked = !webhook || webhook.event_success == 1;
             document.getElementById('modalEventFailure').checked = !webhook || webhook.event_failure == 1;
-            // Show secret only when editing
+            // Show existing secret when editing, or empty for new
             if (edit && webhook && webhook.secret) {
-                secretField.style.display = 'block';
                 document.getElementById('modalWebhookSecret').value = webhook.secret;
+                document.getElementById('modalWebhookSecret').readOnly = true;
             } else {
-                secretField.style.display = 'none';
                 document.getElementById('modalWebhookSecret').value = '';
+                document.getElementById('modalWebhookSecret').readOnly = false;
             }
             openModal(modal);
         }
@@ -1163,6 +1171,7 @@ if (isset($_GET['auth_data'])) {
             const id = document.getElementById('webhookId').value;
             const name = document.getElementById('modalWebhookName').value.trim();
             const webhookUrl = document.getElementById('modalWebhookUrl').value.trim();
+            const secret = document.getElementById('modalWebhookSecret').value.trim();
             const eventSuccess = document.getElementById('modalEventSuccess').checked ? 1 : 0;
             const eventFailure = document.getElementById('modalEventFailure').checked ? 1 : 0;
             if (!name) {
@@ -1179,6 +1188,7 @@ if (isset($_GET['auth_data'])) {
                 name: name,
                 webhook_url: webhookUrl,
             });
+            if (secret) params.append('secret', secret);
             if (eventSuccess) params.append('event_success', '1');
             if (eventFailure) params.append('event_failure', '1');
             fetch('?webhook=1', {
@@ -1217,6 +1227,39 @@ if (isset($_GET['auth_data'])) {
         function escapeHtml(text) {
             var map = {'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;'};
             return text.replace(/[&<>"']/g, function(m) { return map[m]; });
+        }
+        function generateWebhookSecret() {
+            const uppercase = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+            const lowercase = 'abcdefghijklmnopqrstuvwxyz';
+            const numbers = '0123456789';
+            const allChars = uppercase + lowercase + numbers;
+            let secret = [];
+            // Ensure minimum 4 uppercase letters
+            const uppercaseArray = new Uint8Array(4);
+            crypto.getRandomValues(uppercaseArray);
+            for (let i = 0; i < 4; i++) {
+                secret.push(uppercase[uppercaseArray[i] % uppercase.length]);
+            }
+            // Ensure minimum 4 numbers
+            const numbersArray = new Uint8Array(4);
+            crypto.getRandomValues(numbersArray);
+            for (let i = 0; i < 4; i++) {
+                secret.push(numbers[numbersArray[i] % numbers.length]);
+            }
+            // Fill remaining 24 characters with mix of all
+            const remainingArray = new Uint8Array(24);
+            crypto.getRandomValues(remainingArray);
+            for (let i = 0; i < 24; i++) {
+                secret.push(allChars[remainingArray[i] % allChars.length]);
+            }
+            // Shuffle the array to mix everything
+            for (let i = secret.length - 1; i > 0; i--) {
+                const randomArray = new Uint8Array(1);
+                crypto.getRandomValues(randomArray);
+                const j = randomArray[0] % (i + 1);
+                [secret[i], secret[j]] = [secret[j], secret[i]];
+            }
+            document.getElementById('modalWebhookSecret').value = secret.join('');
         }
         </script>
         <!-- Analytics -->
@@ -1464,12 +1507,20 @@ if (isset($_GET['auth_data'])) {
                         </div>
                         <p class="help">The URL where webhook notifications will be sent</p>
                     </div>
-                    <div class="field" id="webhookSecretField" style="display: none;">
+                    <div class="field" id="webhookSecretField">
                         <label class="label">Webhook Secret</label>
-                        <div class="control">
-                            <input class="input" type="text" id="modalWebhookSecret" readonly>
+                        <div class="field has-addons">
+                            <div class="control is-expanded">
+                                <input class="input" type="text" id="modalWebhookSecret" placeholder="Enter a secret or generate one" maxlength="64">
+                            </div>
+                            <div class="control">
+                                <button class="button is-info" type="button" onclick="generateWebhookSecret()">
+                                    <span class="icon"><i class="fas fa-random"></i></span>
+                                    <span>Generate</span>
+                                </button>
+                            </div>
                         </div>
-                        <p class="help">Use this secret to verify webhook requests came from StreamersConnect</p>
+                        <p class="help">A secure secret to verify webhook requests. Leave empty to auto-generate on save.</p>
                     </div>
                     <div class="field">
                         <label class="label">Events to Notify</label>
