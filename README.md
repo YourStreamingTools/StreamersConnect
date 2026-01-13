@@ -395,29 +395,6 @@ The stats page shows:
 - Recent failed authentications with error details
 - Unique user counts
 
-### Managing Whitelist
-
-**For StreamingTools Team:**
-
-To add users to the whitelist, insert directly into the database:
-
-```sql
-INSERT INTO streamersconnect.dashboard_whitelist (twitch_id, user_login, display_name, email, notes) 
-VALUES ('123456789', 'username', 'DisplayName', 'email@example.com', 'Partner - YourCompany');
-```
-
-Check current whitelist:
-
-```sql
-SELECT user_login, display_name, notes, created_at FROM streamersconnect.dashboard_whitelist;
-```
-
-Remove from whitelist:
-
-```sql
-DELETE FROM streamersconnect.dashboard_whitelist WHERE user_login = 'username';
-```
-
 ## 📄 License
 
 Proprietary - For use with StreamingTools ecosystem services and authorized partners only
@@ -435,8 +412,8 @@ For integration requests or technical support, contact the StreamingTools develo
 To integrate your service with StreamersConnect:
 
 1. Contact the StreamingTools team
-2. Provide your Twitch account for dashboard whitelist
-3. Receive dashboard access credentials
+2. Provide your Twitch account username for dashboard whitelist
+3. Once whitelisted, login to the dashboard at `https://streamersconnect.com/dashboard.php`
 4. Configure your OAuth apps and domains through the dashboard
 5. Implement the integration following this documentation
 6. Test in development environment
