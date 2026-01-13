@@ -103,6 +103,38 @@ header('Location: ' . $authUrl);
 exit;
 ```
 
+##### Alternative: Pass OAuth Credentials via Headers
+
+If you prefer not to configure OAuth apps in the dashboard, you can pass your Client ID and Secret directly in the request headers:
+
+```php
+$scopes = [
+    'user:read:email',
+    'channel:read:subscriptions',
+    'chat:read',
+    'chat:edit'
+];
+
+$authUrl = 'https://streamersconnect.com?' . http_build_query([
+    'login' => 'example.com',
+    'scopes' => implode(' ', $scopes),
+    'return_url' => 'https://example.com/auth/callback.php'
+]);
+
+// Initialize cURL for header support
+$ch = curl_init($authUrl);
+curl_setopt($ch, CURLOPT_HTTPHEADER, [
+    'HTTP_X_OAUTH_CLIENT_ID: your_twitch_client_id',
+    'HTTP_X_OAUTH_CLIENT_SECRET: your_twitch_client_secret'
+]);
+curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
+curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+curl_exec($ch);
+curl_close($ch);
+```
+
+**Note:** When using custom headers, your credentials are securely passed and used only for that specific authentication request. They are not stored.
+
 #### Step 2: Handle the Callback
 
 Create a callback handler at the URL you specified in `return_url`. StreamersConnect will redirect users back to this URL with authentication data.
