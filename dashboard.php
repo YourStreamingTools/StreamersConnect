@@ -225,6 +225,67 @@ if ($isWhitelisted) {
             }
         }
         // --- END DOMAIN MANAGEMENT AJAX HANDLERS ---
+        // --- WEBHOOK MANAGEMENT AJAX HANDLERS ---
+        if (isset($_GET['webhook']) && $_SERVER['REQUEST_METHOD'] === 'POST') {
+            $action = $_POST['action'] ?? '';
+            header('Content-Type: application/json');
+            if ($action === 'list') {
+                $stmt = $conn->prepare("SELECT id, name, webhook_url, secret, event_success, event_failure, created_at FROM webhooks WHERE twitch_id = ? ORDER BY id DESC");
+                $stmt->bind_param('s', $twitchId);
+                $stmt->execute();
+                $result = $stmt->get_result();
+                $webhooks = [];
+                while ($row = $result->fetch_assoc()) {
+                    $webhooks[] = $row;
+                }
+                $stmt->close();
+                echo json_encode(['success' => true, 'webhooks' => $webhooks]);
+                exit;
+            } elseif ($action === 'save') {
+                $id = $_POST['id'] ?? 0;
+                $name = trim($_POST['name'] ?? '');
+                $webhookUrl = trim($_POST['webhook_url'] ?? '');
+                $eventSuccess = isset($_POST['event_success']) ? 1 : 0;
+                $eventFailure = isset($_POST['event_failure']) ? 1 : 0;
+                if (empty($name)) {
+                    echo json_encode(['success' => false, 'message' => 'Webhook name is required']);
+                    exit;
+                }
+                if (empty($webhookUrl)) {
+                    echo json_encode(['success' => false, 'message' => 'Webhook URL is required']);
+                    exit;
+                }
+                if (!filter_var($webhookUrl, FILTER_VALIDATE_URL)) {
+                    echo json_encode(['success' => false, 'message' => 'Invalid webhook URL']);
+                    exit;
+                }
+                if ($id > 0) {
+                    // Update (don't change secret on update)
+                    $stmt = $conn->prepare("UPDATE webhooks SET name = ?, webhook_url = ?, event_success = ?, event_failure = ? WHERE id = ? AND twitch_id = ?");
+                    $stmt->bind_param('ssiiis', $name, $webhookUrl, $eventSuccess, $eventFailure, $id, $twitchId);
+                } else {
+                    // Insert - generate a new secret
+                    $secret = bin2hex(random_bytes(32));
+                    $stmt = $conn->prepare("INSERT INTO webhooks (twitch_id, user_login, name, webhook_url, secret, event_success, event_failure) VALUES (?, ?, ?, ?, ?, ?, ?)");
+                    $stmt->bind_param('sssssii', $twitchId, $userLogin, $name, $webhookUrl, $secret, $eventSuccess, $eventFailure);
+                }
+                $success = $stmt->execute();
+                $stmt->close();
+                echo json_encode(['success' => $success]);
+                exit;
+            } elseif ($action === 'delete') {
+                $id = intval($_POST['id'] ?? 0);
+                $stmt = $conn->prepare("DELETE FROM webhooks WHERE id = ? AND twitch_id = ?");
+                $stmt->bind_param('is', $id, $twitchId);
+                $success = $stmt->execute();
+                $stmt->close();
+                echo json_encode(['success' => $success]);
+                exit;
+            }
+            echo json_encode(['success' => false, 'message' => 'Invalid action']);
+            exit;
+        }
+        // --- END WEBHOOK MANAGEMENT AJAX HANDLERS ---
         // AJAX save handler (service config)
         if (isset($_GET['save']) && $_SERVER['REQUEST_METHOD'] === 'POST') {
             $newTwitch = trim($_POST['twitch_scopes'] ?? 'user:read:email');
@@ -994,13 +1055,15 @@ if (isset($_GET['auth_data'])) {
                 }).showToast();
             });
         }
-
         document.addEventListener('DOMContentLoaded', function() {
             // Domain management
             if (document.getElementById('domainsContainer')) {
                 renderDomains();
             }
-            
+            // Webhook management
+            if (document.getElementById('webhooksContainer')) {
+                renderWebhooks();
+            }
             // Create domain button
             var createDomainBtn = document.getElementById('createDomainBtn');
             if (createDomainBtn) {
@@ -1008,7 +1071,6 @@ if (isset($_GET['auth_data'])) {
                     showDomainModal(false, null);
                 });
             }
-            
             // Domain modal close events
             const domainModal = document.getElementById('domainModal');
             if (domainModal) {
@@ -1016,21 +1078,146 @@ if (isset($_GET['auth_data'])) {
                 domainModal.querySelector('.modal-background').addEventListener('click', () => {
                     closeModal(domainModal);
                 });
-                
                 // Close on delete button click
                 domainModal.querySelector('.delete').addEventListener('click', () => {
                     closeModal(domainModal);
                 });
-                
                 // Cancel button
                 document.getElementById('domainModalCancelBtn').addEventListener('click', () => {
                     closeModal(domainModal);
                 });
-                
                 // Save button
                 document.getElementById('domainModalSaveBtn').addEventListener('click', saveDomain);
             }
+            // Webhook modal events
+            const webhookModal = document.getElementById('webhookModal');
+            if (webhookModal) {
+                webhookModal.querySelector('.modal-background').addEventListener('click', () => {
+                    closeModal(webhookModal);
+                });
+                webhookModal.querySelector('.delete').addEventListener('click', () => {
+                    closeModal(webhookModal);
+                });
+                document.getElementById('webhookModalCancelBtn').addEventListener('click', () => {
+                    closeModal(webhookModal);
+                });
+                document.getElementById('webhookModalSaveBtn').addEventListener('click', saveWebhook);
+            }
         });
+        // --- WEBHOOK MANAGEMENT ---
+        function renderWebhooks() {
+            fetch('?webhook=1', {
+                method: 'POST',
+                body: new URLSearchParams({action: 'list'})
+            })
+            .then(r => r.json())
+            .then(res => {
+                var list = document.getElementById('webhooksContainer');
+                if (!res.success || !res.webhooks || res.webhooks.length === 0) {
+                    list.innerHTML = '<div class="alert-info"><i class="fas fa-info-circle"></i> No webhooks configured yet. Click "Add Webhook" to create one.</div>';
+                    return;
+                }
+                var html = '<table class="table-dark" style="margin-top: 1rem;"><thead><tr><th>Name</th><th>Webhook URL</th><th class="center">Success</th><th class="center">Failure</th><th class="center">Actions</th></tr></thead><tbody>';
+                res.webhooks.forEach(function(webhook) {
+                    var successIcon = webhook.event_success == 1 ? '<i class="fas fa-check" style="color: #48bb78;"></i>' : '<i class="fas fa-times" style="color: #ef4444;"></i>';
+                    var failureIcon = webhook.event_failure == 1 ? '<i class="fas fa-check" style="color: #48bb78;"></i>' : '<i class="fas fa-times" style="color: #ef4444;"></i>';
+                    html += '<tr>';
+                    html += '<td><strong>' + escapeHtml(webhook.name) + '</strong></td>';
+                    html += '<td>' + escapeHtml(webhook.webhook_url) + '</td>';
+                    html += '<td class="center">' + successIcon + '</td>';
+                    html += '<td class="center">' + failureIcon + '</td>';
+                    html += '<td class="center nowrap">';
+                    html += '<button class="btn-edit" onclick=\'showWebhookModal(true, ' + JSON.stringify(webhook) + ')\'><i class="fas fa-edit"></i> Edit</button>';
+                    html += '<button class="btn-delete" onclick="deleteWebhook(' + webhook.id + ')"><i class="fas fa-trash"></i> Delete</button>';
+                    html += '</td></tr>';
+                });
+                html += '</tbody></table>';
+                list.innerHTML = html;
+            });
+        }
+        function showWebhookModal(edit, webhook) {
+            const modal = document.getElementById('webhookModal');
+            const modalTitle = document.getElementById('webhookModalTitle');
+            const saveBtn = document.getElementById('webhookModalSaveBtn');
+            const secretField = document.getElementById('webhookSecretField');
+            modalTitle.textContent = edit ? 'Edit Webhook' : 'Add Webhook';
+            saveBtn.textContent = edit ? 'Save Changes' : 'Add Webhook';
+            document.getElementById('webhookEditMode').value = edit ? '1' : '0';
+            document.getElementById('webhookId').value = edit && webhook ? webhook.id : '';
+            document.getElementById('modalWebhookName').value = (webhook && webhook.name) ? webhook.name : '';
+            document.getElementById('modalWebhookUrl').value = (webhook && webhook.webhook_url) ? webhook.webhook_url : '';
+            document.getElementById('modalEventSuccess').checked = !webhook || webhook.event_success == 1;
+            document.getElementById('modalEventFailure').checked = !webhook || webhook.event_failure == 1;
+            // Show secret only when editing
+            if (edit && webhook && webhook.secret) {
+                secretField.style.display = 'block';
+                document.getElementById('modalWebhookSecret').value = webhook.secret;
+            } else {
+                secretField.style.display = 'none';
+                document.getElementById('modalWebhookSecret').value = '';
+            }
+            openModal(modal);
+        }
+        function saveWebhook() {
+            const editMode = document.getElementById('webhookEditMode').value === '1';
+            const id = document.getElementById('webhookId').value;
+            const name = document.getElementById('modalWebhookName').value.trim();
+            const webhookUrl = document.getElementById('modalWebhookUrl').value.trim();
+            const eventSuccess = document.getElementById('modalEventSuccess').checked ? 1 : 0;
+            const eventFailure = document.getElementById('modalEventFailure').checked ? 1 : 0;
+            if (!name) {
+                Toastify({text: "Webhook name is required", backgroundColor: "#ef4444", duration: 3000}).showToast();
+                return;
+            }
+            if (!webhookUrl) {
+                Toastify({text: "Webhook URL is required", backgroundColor: "#ef4444", duration: 3000}).showToast();
+                return;
+            }
+            var params = new URLSearchParams({
+                action: 'save',
+                id: id,
+                name: name,
+                webhook_url: webhookUrl,
+            });
+            if (eventSuccess) params.append('event_success', '1');
+            if (eventFailure) params.append('event_failure', '1');
+            fetch('?webhook=1', {
+                method: 'POST',
+                body: params
+            })
+            .then(r => r.json())
+            .then(res => {
+                if (res.success) {
+                    Toastify({text: editMode ? "Webhook updated successfully!" : "Webhook added successfully!", backgroundColor: "#10b981", duration: 3000}).showToast();
+                    closeAllModals();
+                    renderWebhooks();
+                } else {
+                    Toastify({text: res.message || "Failed to save webhook", backgroundColor: "#ef4444", duration: 3000}).showToast();
+                }
+            });
+        }
+        function deleteWebhook(id) {
+            if (!confirm('Are you sure you want to delete this webhook? This action cannot be undone.')) {
+                return;
+            }
+            fetch('?webhook=1', {
+                method: 'POST',
+                body: new URLSearchParams({action: 'delete', id: id})
+            })
+            .then(r => r.json())
+            .then(res => {
+                if (res.success) {
+                    Toastify({text: "Webhook deleted successfully!", backgroundColor: "#10b981", duration: 3000}).showToast();
+                    renderWebhooks();
+                } else {
+                    Toastify({text: "Failed to delete webhook", backgroundColor: "#ef4444", duration: 3000}).showToast();
+                }
+            });
+        }
+        function escapeHtml(text) {
+            var map = {'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;'};
+            return text.replace(/[&<>"']/g, function(m) { return map[m]; });
+        }
         </script>
         <!-- Analytics -->
         <div class="info-box">
@@ -1243,30 +1430,65 @@ if (isset($_GET['auth_data'])) {
                 <button disabled class="btn-disabled">Save Configuration (Coming Soon)</button>
             <?php endif; ?>
         </div>
-        <!-- Webhook Management Preview -->
+        <!-- Webhook Management -->
         <div class="info-box">
             <h3><i class="fas fa-bell"></i> Webhook Management</h3>
-            <p class="info-text-white">Configure webhooks for authentication events.</p>
-            <div class="app-card">
-                <div class="mb-10">
-                    <label class="label-white">Webhook URL</label>
-                    <input type="text" disabled placeholder="https://your-domain.com/webhook" class="input-light">
-                </div>
-                <div class="mb-10">
-                    <label class="label-white">Events</label>
-                    <div class="flex-wrap-gap">
-                        <label class="checkbox-label">
-                            <input type="checkbox" disabled checked> auth.success
-                        </label>
-                        <label class="checkbox-label">
-                            <input type="checkbox" disabled> auth.failure
-                        </label>
-                        <label class="checkbox-label">
-                            <input type="checkbox" disabled> token.refresh
-                        </label>
+            <p class="info-text-white">Configure webhooks to receive notifications for authentication events.</p>
+            <button class="btn-create-app js-modal-trigger" data-target="webhookModal" onclick="showWebhookModal(false, null)">
+                <i class="fas fa-plus"></i> Add Webhook
+            </button>
+            <div id="webhooksContainer"></div>
+        </div>
+        <!-- Webhook Modal -->
+        <div id="webhookModal" class="modal">
+            <div class="modal-background"></div>
+            <div class="modal-card">
+                <header class="modal-card-head">
+                    <p class="modal-card-title" id="webhookModalTitle">Add Webhook</p>
+                    <button class="delete" aria-label="close"></button>
+                </header>
+                <section class="modal-card-body">
+                    <input type="hidden" id="webhookEditMode" value="0">
+                    <input type="hidden" id="webhookId" value="">
+                    <div class="field">
+                        <label class="label">Webhook Name</label>
+                        <div class="control">
+                            <input class="input" type="text" id="modalWebhookName" placeholder="My Production Webhook" required>
+                        </div>
+                        <p class="help">A friendly name to identify this webhook</p>
                     </div>
-                </div>
-                <button disabled class="btn-disabled">Test Webhook (Coming Soon)</button>
+                    <div class="field">
+                        <label class="label">Webhook URL</label>
+                        <div class="control">
+                            <input class="input" type="url" id="modalWebhookUrl" placeholder="https://your-domain.com/webhook" required>
+                        </div>
+                        <p class="help">The URL where webhook notifications will be sent</p>
+                    </div>
+                    <div class="field" id="webhookSecretField" style="display: none;">
+                        <label class="label">Webhook Secret</label>
+                        <div class="control">
+                            <input class="input" type="text" id="modalWebhookSecret" readonly>
+                        </div>
+                        <p class="help">Use this secret to verify webhook requests came from StreamersConnect</p>
+                    </div>
+                    <div class="field">
+                        <label class="label">Events to Notify</label>
+                        <div class="control">
+                            <label class="checkbox" style="display: block; margin-bottom: 0.5rem;">
+                                <input type="checkbox" id="modalEventSuccess" checked>
+                                Authentication Success
+                            </label>
+                            <label class="checkbox" style="display: block;">
+                                <input type="checkbox" id="modalEventFailure" checked>
+                                Authentication Failure
+                            </label>
+                        </div>
+                    </div>
+                </section>
+                <footer class="modal-card-foot">
+                    <button class="button is-success" id="webhookModalSaveBtn" onclick="saveWebhook()">Add Webhook</button>
+                    <button class="button" id="webhookModalCancelBtn">Cancel</button>
+                </footer>
             </div>
         </div>
         <div class="footer">
