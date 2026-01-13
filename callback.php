@@ -23,10 +23,18 @@ if (isset($_GET['code']) && isset($_GET['state'])) {
     // Get custom credentials from session if they were provided
     $customClientId = $_SESSION['custom_client_id'] ?? null;
     $customClientSecret = $_SESSION['custom_client_secret'] ?? null;
+    // If no custom credentials, try to get domain-specific OAuth app
+    if (!$customClientId || !$customClientSecret) {
+        $originDomain = $_SESSION['origin_domain'] ?? 'unknown';
+        $domainCredentials = getOAuthCredentialsForDomain($service, $originDomain);
+        if ($domainCredentials) {
+            $customClientId = $domainCredentials['client_id'];
+            $customClientSecret = $domainCredentials['client_secret'];
+        }
+    }
     // Route to appropriate service handler
     $originDomain = $_SESSION['origin_domain'] ?? 'unknown';
     $requestedScopes = $_SESSION['requested_scopes'] ?? '';
-    
     switch ($service) {
         case 'twitch':
             $tokenData = exchangeTwitchCodeForToken($authCode, $customClientId, $customClientSecret);
@@ -144,6 +152,37 @@ if (isset($_GET['error'])) {
 }
 
 /**
+ * Get OAuth credentials for a specific domain
+ * Checks if the domain has a custom OAuth app assigned
+ */
+function getOAuthCredentialsForDomain($service, $domain) {
+    require '/var/www/config/database.php';
+    try {
+        $pdo = new PDO(DB_DSN, DB_USER, DB_PASSWORD);
+        $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+        // Look up domain and its assigned OAuth app
+        $stmt = $pdo->prepare("
+            SELECT oa.client_id, oa.client_secret 
+            FROM user_allowed_domains uad
+            INNER JOIN oauth_applications oa ON uad.oauth_app_id = oa.id
+            WHERE uad.domain = ? AND oa.service = ? AND oa.is_active = 1
+        ");
+        $stmt->execute([$domain, $service]);
+        $result = $stmt->fetch(PDO::FETCH_ASSOC);
+        if ($result) {
+            return [
+                'client_id' => $result['client_id'],
+                'client_secret' => $result['client_secret']
+            ];
+        }
+        return null;
+    } catch (PDOException $e) {
+        error_log("Error fetching OAuth credentials for domain: " . $e->getMessage());
+        return null;
+    }
+}
+
+/**
  * Exchange Twitch authorization code for access token
  */
 function exchangeTwitchCodeForToken($code, $customClientId = null, $customClientSecret = null) {
@@ -190,7 +229,6 @@ function getTwitchUserData($accessToken, $customClientId = null) {
             $customClientId = $credentials['client_id'];
         }
     }
-    
     $userUrl = 'https://api.twitch.tv/helix/users';
     $ch = curl_init();
     curl_setopt($ch, CURLOPT_URL, $userUrl);
@@ -223,7 +261,6 @@ function exchangeDiscordCodeForToken($code, $customClientId = null, $customClien
             $customClientSecret = $customClientSecret ?? $credentials['client_secret'];
         }
     }
-    
     $tokenUrl = 'https://discord.com/api/oauth2/token';
     $postData = [
         'client_id' => $customClientId ?? DISCORD_CLIENT_ID,
