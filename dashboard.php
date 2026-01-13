@@ -77,10 +77,9 @@ if ($isWhitelisted) {
                 $app_name = $_POST['app_name'] ?? '';
                 $client_id = $_POST['client_id'] ?? '';
                 $client_secret = $_POST['client_secret'] ?? '';
-                $redirect_uris = $_POST['redirect_uris'] ?? '';
-                $scopes = $_POST['scopes'] ?? '';
-                $stmt = $conn->prepare("INSERT INTO user_oauth_applications (user_login, service, app_name, client_id, client_secret, redirect_uris, scopes) VALUES (?, ?, ?, ?, ?, ?, ?)");
-                $stmt->bind_param('sssssss', $userLogin, $service, $app_name, $client_id, $client_secret, $redirect_uris, $scopes);
+                $is_default = isset($_POST['is_default']) ? 1 : 0;
+                $stmt = $conn->prepare("INSERT INTO oauth_applications (user_id, user_login, service, app_name, client_id, client_secret, is_default) VALUES (?, ?, ?, ?, ?, ?, ?)");
+                $stmt->bind_param('ssssssi', $twitchId, $userLogin, $service, $app_name, $client_id, $client_secret, $is_default);
                 $ok = $stmt->execute();
                 $stmt->close();
                 header('Content-Type: application/json');
@@ -92,10 +91,9 @@ if ($isWhitelisted) {
                 $app_name = $_POST['app_name'] ?? '';
                 $client_id = $_POST['client_id'] ?? '';
                 $client_secret = $_POST['client_secret'] ?? '';
-                $redirect_uris = $_POST['redirect_uris'] ?? '';
-                $scopes = $_POST['scopes'] ?? '';
-                $stmt = $conn->prepare("UPDATE user_oauth_applications SET service=?, app_name=?, client_id=?, client_secret=?, redirect_uris=?, scopes=? WHERE id=? AND user_login=?");
-                $stmt->bind_param('ssssssis', $service, $app_name, $client_id, $client_secret, $redirect_uris, $scopes, $id, $userLogin);
+                $is_default = isset($_POST['is_default']) ? 1 : 0;
+                $stmt = $conn->prepare("UPDATE oauth_applications SET service=?, app_name=?, client_id=?, client_secret=?, is_default=? WHERE id=? AND user_login=?");
+                $stmt->bind_param('ssssiis', $service, $app_name, $client_id, $client_secret, $is_default, $id, $userLogin);
                 $ok = $stmt->execute();
                 $stmt->close();
                 header('Content-Type: application/json');
@@ -103,7 +101,7 @@ if ($isWhitelisted) {
                 exit;
             } elseif ($action === 'delete') {
                 $id = intval($_POST['id'] ?? 0);
-                $stmt = $conn->prepare("DELETE FROM user_oauth_applications WHERE id=? AND user_login=?");
+                $stmt = $conn->prepare("DELETE FROM oauth_applications WHERE id=? AND user_login=?");
                 $stmt->bind_param('is', $id, $userLogin);
                 $ok = $stmt->execute();
                 $stmt->close();
@@ -112,7 +110,7 @@ if ($isWhitelisted) {
                 exit;
             } elseif ($action === 'list') {
                 $apps = [];
-                $stmt = $conn->prepare("SELECT id, service, app_name, client_id, client_secret, redirect_uris, scopes FROM user_oauth_applications WHERE user_login=? ORDER BY id DESC");
+                $stmt = $conn->prepare("SELECT id, service, app_name, client_id, client_secret, is_default FROM oauth_applications WHERE user_login=? ORDER BY is_default DESC, id DESC");
                 $stmt->bind_param('s', $userLogin);
                 $stmt->execute();
                 $result = $stmt->get_result();
@@ -204,7 +202,7 @@ if ($isWhitelisted) {
         }
         // Fetch user's OAuth apps for display
         $userOAuthApps = [];
-        $stmt = $conn->prepare("SELECT id, service, app_name, client_id, client_secret, redirect_uris, scopes FROM user_oauth_applications WHERE user_login=? ORDER BY id DESC");
+        $stmt = $conn->prepare("SELECT id, service, app_name, client_id, client_secret, is_default FROM oauth_applications WHERE user_login=? ORDER BY is_default DESC, id DESC");
         $stmt->bind_param('s', $userLogin);
         $stmt->execute();
         $result = $stmt->get_result();
@@ -379,11 +377,11 @@ if ($isWhitelisted) {
                     }
                     let html = '';
                     res.apps.forEach(function(app) {
+                        const defaultBadge = app.is_default ? '<span class="tag is-success ml-2"><i class="fas fa-check-circle"></i> Default</span>' : '';
                         html += `<div class="box" data-id="${app.id}" style="margin-bottom: 1rem;">
-                            <h4 class="title is-5">${app.app_name} <span class="tag is-primary">${app.service}</span></h4>
+                            <h4 class="title is-5">${app.app_name} <span class="tag is-primary">${app.service}</span>${defaultBadge}</h4>
                             <p><strong>Client ID:</strong> ${app.client_id}</p>
-                            <p><strong>Redirect URIs:</strong> ${app.redirect_uris}</p>
-                            <p><strong>Scopes:</strong> ${app.scopes}</p>
+                            <p class="help">Redirects and scopes are determined by the <code>&return_url=</code> and <code>&scopes=</code> parameters in authentication requests</p>
                             <div class="buttons" style="margin-top: 1rem;">
                                 <button class="button is-small is-info oauthAppEditBtn"><i class="fas fa-edit"></i> Edit</button>
                                 <button class="button is-small is-danger oauthAppDeleteBtn"><i class="fas fa-trash"></i> Delete</button>
@@ -427,15 +425,11 @@ if ($isWhitelisted) {
                 formHtml += '<input class="input" type="text" id="modalClientSecret" value="'+(app?app.client_secret:'')+'" maxlength="128">';
                 formHtml += '</div></div>';
                 formHtml += '<div class="field">';
-                formHtml += '<label class="label">Redirect URIs (comma separated)</label>';
-                formHtml += '<div class="control">';
-                formHtml += '<input class="input" type="text" id="modalRedirectUris" value="'+(app?app.redirect_uris:'')+'" maxlength="512">';
-                formHtml += '</div></div>';
-                formHtml += '<div class="field">';
-                formHtml += '<label class="label">Scopes</label>';
-                formHtml += '<div class="control">';
-                formHtml += '<input class="input" type="text" id="modalScopes" value="'+(app?app.scopes:'')+'" maxlength="256">';
-                formHtml += '</div></div>';
+                formHtml += '<label class="checkbox">';
+                formHtml += '<input type="checkbox" id="modalIsDefault" '+((app && app.is_default) ? 'checked' : '')+'>  Use as default credentials';
+                formHtml += '</label>';
+                formHtml += '<p class="help">If checked, this will be used when no custom OAuth credentials are provided via headers. Scopes are specified per authentication request via the <code>&scopes=</code> URL parameter.</p>';
+                formHtml += '</div>';
                 modalBody.innerHTML = formHtml;
                 // Footer buttons
                 let footerHtml = '';
@@ -452,11 +446,10 @@ if ($isWhitelisted) {
                     var appName = document.getElementById('modalAppName').value.trim();
                     var clientId = document.getElementById('modalClientId').value.trim();
                     var clientSecret = document.getElementById('modalClientSecret').value.trim();
-                    var redirectUris = document.getElementById('modalRedirectUris').value.trim();
-                    var scopes = document.getElementById('modalScopes').value.trim();
-                    if (!appName || !clientId || !clientSecret || !redirectUris || !scopes) {
+                    var isDefault = document.getElementById('modalIsDefault').checked;
+                    if (!appName || !clientId || !clientSecret) {
                         Toastify({
-                            text: "All fields are required",
+                            text: "App Name, Client ID, and Client Secret are required",
                             duration: 3000,
                             gravity: "top",
                             position: "right",
@@ -472,8 +465,7 @@ if ($isWhitelisted) {
                     data.append('app_name', appName);
                     data.append('client_id', clientId);
                     data.append('client_secret', clientSecret);
-                    data.append('redirect_uris', redirectUris);
-                    data.append('scopes', scopes);
+                    if (isDefault) data.append('is_default', '1');
                     fetch('?oauth_app=1', {
                         method: 'POST',
                         body: data
