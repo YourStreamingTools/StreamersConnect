@@ -22,14 +22,6 @@ define('STREAMERS_CONNECT_DOMAIN', 'streamersconnect.com');
 define('REDIRECT_URI', 'https://' . STREAMERS_CONNECT_DOMAIN . '/callback.php');
 define('INTERNAL_DASHBOARD_URL', 'https://' . STREAMERS_CONNECT_DOMAIN . '/dashboard.php');
 
-// Whitelist of allowed domains that can use this auth service
-// Add all your domains here for security
-$ALLOWED_DOMAINS = [
-    'streamersconnect.com',
-    'www.streamersconnect.com',
-    // Add more domains as needed
-];
-
 // Security settings
 define('SESSION_LIFETIME', 3600); // 1 hour
 define('USE_SECURE_COOKIES', true); // Set to true in production (requires HTTPS)
@@ -75,18 +67,53 @@ function getStreamersConnectDB() {
 }
 
 /**
- * Check if user is whitelisted for dashboard access
+ * Check if a domain is allowed for authentication
+ * Domains are now managed through the dashboard by whitelisted users
+ * See database table: user_allowed_domains
  */
-function isWhitelistedUser($userLogin) {
+function isAllowedDomain($domain) {
     $conn = getStreamersConnectDB();
     if (!$conn) return false;
-    $stmt = $conn->prepare("SELECT id FROM dashboard_whitelist WHERE user_login = ?");
-    $stmt->bind_param("s", $userLogin);
+    $stmt = $conn->prepare("SELECT id FROM user_allowed_domains WHERE domain = ? LIMIT 1");
+    $stmt->bind_param("s", $domain);
+    $stmt->execute();
+    $result = $stmt->get_result();
+    $isAllowed = $result->num_rows > 0;
+    $stmt->close();
+    return $isAllowed;
+}
+
+/**
+ * Get all domains for a user
+ */
+function getUserDomains($twitchId) {
+    $conn = getStreamersConnectDB();
+    if (!$conn) return [];
+    $stmt = $conn->prepare("SELECT id, domain, notes, created_at FROM user_allowed_domains WHERE twitch_id = ? ORDER BY domain ASC");
+    $stmt->bind_param("s", $twitchId);
+    $stmt->execute();
+    $result = $stmt->get_result();
+    $domains = [];
+    while ($row = $result->fetch_assoc()) {
+        $domains[] = $row;
+    }
+    $stmt->close();
+    return $domains;
+}
+
+/**
+ * Check if user is whitelisted for dashboard access
+ * Users are now managed by their Twitch ID (not username)
+ */
+function isWhitelistedUser($twitchId) {
+    $conn = getStreamersConnectDB();
+    if (!$conn) return false;
+    $stmt = $conn->prepare("SELECT id FROM dashboard_whitelist WHERE twitch_id = ?");
+    $stmt->bind_param("s", $twitchId);
     $stmt->execute();
     $result = $stmt->get_result();
     $isWhitelisted = $result->num_rows > 0;
     $stmt->close();
-    
     return $isWhitelisted;
 }
 
