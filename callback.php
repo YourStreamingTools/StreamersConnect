@@ -147,6 +147,14 @@ if (isset($_GET['error'])) {
  * Exchange Twitch authorization code for access token
  */
 function exchangeTwitchCodeForToken($code, $customClientId = null, $customClientSecret = null) {
+    // Use custom credentials if provided, otherwise get from database
+    if (!$customClientId || !$customClientSecret) {
+        $credentials = getDefaultOAuthCredentials('twitch', $_SESSION['user_id'] ?? null);
+        if ($credentials) {
+            $customClientId = $customClientId ?? $credentials['client_id'];
+            $customClientSecret = $customClientSecret ?? $credentials['client_secret'];
+        }
+    }
     $tokenUrl = 'https://id.twitch.tv/oauth2/token';
     $postData = [
         'client_id' => $customClientId ?? TWITCH_CLIENT_ID,
@@ -175,6 +183,14 @@ function exchangeTwitchCodeForToken($code, $customClientId = null, $customClient
  * Get user data from Twitch API
  */
 function getTwitchUserData($accessToken, $customClientId = null) {
+    // Use custom client ID if provided, otherwise get from database
+    if (!$customClientId) {
+        $credentials = getDefaultOAuthCredentials('twitch', $_SESSION['user_id'] ?? null);
+        if ($credentials) {
+            $customClientId = $credentials['client_id'];
+        }
+    }
+    
     $userUrl = 'https://api.twitch.tv/helix/users';
     $ch = curl_init();
     curl_setopt($ch, CURLOPT_URL, $userUrl);
@@ -199,6 +215,15 @@ function getTwitchUserData($accessToken, $customClientId = null) {
  * Exchange Discord authorization code for access token
  */
 function exchangeDiscordCodeForToken($code, $customClientId = null, $customClientSecret = null) {
+    // Use custom credentials if provided, otherwise get from database
+    if (!$customClientId || !$customClientSecret) {
+        $credentials = getDefaultOAuthCredentials('discord', $_SESSION['user_id'] ?? null);
+        if ($credentials) {
+            $customClientId = $customClientId ?? $credentials['client_id'];
+            $customClientSecret = $customClientSecret ?? $credentials['client_secret'];
+        }
+    }
+    
     $tokenUrl = 'https://discord.com/api/oauth2/token';
     $postData = [
         'client_id' => $customClientId ?? DISCORD_CLIENT_ID,
