@@ -53,8 +53,8 @@ if (isset($_GET['service']) && isset($_GET['login']) && isset($_GET['scopes'])) 
     if (!in_array($service, $supportedServices)) {
         die('Error: Unsupported service. Supported services: ' . implode(', ', $supportedServices));
     }
-    // Security: Validate the domain is in our whitelist
-    if (!in_array($originDomain, $ALLOWED_DOMAINS)) {
+    // Security: Validate the domain is in our database whitelist
+    if (!isAllowedDomain($originDomain)) {
         die('Error: Unauthorized domain');
     }
     // Require return_url parameter
@@ -136,6 +136,9 @@ function buildDiscordAuthUrl($scopes, $customClientId = null) {
     <link rel="icon" href="https://cdn.yourstreamingtools.com/img/logo.ico">
     <link rel="apple-touch-icon" href="https://cdn.yourstreamingtools.com/img/logo.ico">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.css">
+    <!-- Bulma CSS 1.0.4 -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bulma@1.0.4/css/bulma.min.css">
+    <!-- Custom CSS -->
     <link rel="stylesheet" href="custom.css?v=<?php echo filemtime(__DIR__ . '/custom.css'); ?>">
 </head>
 <body>
@@ -152,9 +155,9 @@ function buildDiscordAuthUrl($scopes, $customClientId = null) {
                 <h3><i class="fas fa-user"></i> Welcome, <?php echo htmlspecialchars($_SESSION['user_display_name']); ?>!</h3>
             </div>
             <div class="info-box dashboard-highlight">
-                <h3><i class="fas fa-rocket"></i> Partner Dashboard - Coming Soon</h3>
-                <p>We're building an exclusive dashboard for authorized partners to manage their integrations, view analytics, and configure OAuth applications.</p>
-                <p class="mt-1rem"><strong>Upcoming Features:</strong></p>
+                <h3><i class="fas fa-rocket"></i> Partner Dashboard</h3>
+                <p>Access your exclusive dashboard to manage integrations, view analytics, and configure OAuth applications.</p>
+                <p class="mt-1rem"><strong>Available Features:</strong></p>
                 <ul class="feature-list">
                     <li><i class="fas fa-key"></i> OAuth Application Management</li>
                     <li><i class="fas fa-chart-bar"></i> Authentication Analytics</li>
@@ -163,7 +166,7 @@ function buildDiscordAuthUrl($scopes, $customClientId = null) {
                     <li><i class="fas fa-shield-alt"></i> Security & Compliance Tools</li>
                 </ul>
                 <a href="dashboard.php" class="btn btn-light">
-                    <i class="fas fa-eye"></i> Preview Dashboard (Non-Functional)
+                    <i class="fas fa-tachometer-alt"></i> Go to Dashboard
                 </a>
             </div>
             <div class="info-box">
