@@ -24,7 +24,7 @@ StreamersConnect acts as a central authentication hub that handles Twitch OAuth 
 - cURL extension enabled
 - HTTPS enabled (required for OAuth)
 - Partner dashboard access (whitelisted Twitch account)
-- Twitch/Discord Developer Application (can use your own or default shared app)
+- Twitch/Discord Developer Application
 
 ## 🔧 Setup for Partners
 
