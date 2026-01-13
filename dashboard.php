@@ -260,9 +260,12 @@ if ($isWhitelisted) {
             SELECT 
                 COUNT(*) as total_auths,
                 SUM(CASE WHEN success = 1 THEN 1 ELSE 0 END) as successful_auths,
-                SUM(CASE WHEN MONTH(created_at) = MONTH(CURRENT_DATE()) AND YEAR(created_at) = YEAR(CURRENT_DATE()) THEN 1 ELSE 0 END) as this_month
-            FROM auth_logs
+                SUM(CASE WHEN MONTH(al.created_at) = MONTH(CURRENT_DATE()) AND YEAR(al.created_at) = YEAR(CURRENT_DATE()) THEN 1 ELSE 0 END) as this_month
+            FROM auth_logs al
+            INNER JOIN user_allowed_domains uad ON al.origin_domain = uad.domain
+            WHERE uad.twitch_id = ?
         ");
+        $stmt->bind_param('s', $twitchId);
         $stmt->execute();
         $result = $stmt->get_result();
         $authStats = $result->fetch_assoc();
@@ -276,14 +279,17 @@ if ($isWhitelisted) {
         // Get authentication by domain
         $stmt = $conn->prepare("
             SELECT 
-                origin_domain,
+                al.origin_domain,
                 COUNT(*) as auth_count,
-                SUM(CASE WHEN success = 1 THEN 1 ELSE 0 END) as successful,
-                MAX(created_at) as last_auth
-            FROM auth_logs
-            GROUP BY origin_domain
+                SUM(CASE WHEN al.success = 1 THEN 1 ELSE 0 END) as successful,
+                MAX(al.created_at) as last_auth
+            FROM auth_logs al
+            INNER JOIN user_allowed_domains uad ON al.origin_domain = uad.domain
+            WHERE uad.twitch_id = ?
+            GROUP BY al.origin_domain
             ORDER BY auth_count DESC
         ");
+        $stmt->bind_param('s', $twitchId);
         $stmt->execute();
         $result = $stmt->get_result();
         $domainStats = [];
@@ -294,17 +300,20 @@ if ($isWhitelisted) {
         // Get recent authentication attempts (last 5)
         $stmt = $conn->prepare("
             SELECT 
-                service,
-                origin_domain,
-                user_login,
-                user_display_name,
-                success,
-                error_message,
-                created_at
-            FROM auth_logs
-            ORDER BY created_at DESC
+                al.service,
+                al.origin_domain,
+                al.user_login,
+                al.user_display_name,
+                al.success,
+                al.error_message,
+                al.created_at
+            FROM auth_logs al
+            INNER JOIN user_allowed_domains uad ON al.origin_domain = uad.domain
+            WHERE uad.twitch_id = ?
+            ORDER BY al.created_at DESC
             LIMIT 5
         ");
+        $stmt->bind_param('s', $twitchId);
         $stmt->execute();
         $result = $stmt->get_result();
         $recentAuths = [];
