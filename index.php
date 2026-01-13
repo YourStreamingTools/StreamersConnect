@@ -38,17 +38,16 @@ if (isset($_GET['logout'])) {
  */
 if (isset($_GET['service']) && isset($_GET['login']) && isset($_GET['scopes'])) {
     // Get and validate parameters
-    $service = strtolower(filter_var($_GET['service'], FILTER_SANITIZE_STRING));
-    $originDomain = filter_var($_GET['login'], FILTER_SANITIZE_STRING);
+    $service = strtolower(htmlspecialchars($_GET['service'], ENT_QUOTES, 'UTF-8'));
+    $originDomain = htmlspecialchars($_GET['login'], ENT_QUOTES, 'UTF-8');
     // Set default Twitch scope if none provided
-    $requestedScopes = isset($_GET['scopes']) && trim($_GET['scopes']) !== '' ? filter_var($_GET['scopes'], FILTER_SANITIZE_STRING) : null;
+    $requestedScopes = isset($_GET['scopes']) && trim($_GET['scopes']) !== '' ? htmlspecialchars($_GET['scopes'], ENT_QUOTES, 'UTF-8') : null;
     if ($service === 'twitch' && (!$requestedScopes || $requestedScopes === '')) {
         $requestedScopes = 'user:read:email';
     }
     // Check for custom OAuth credentials in headers
     $customClientId = $_SERVER['HTTP_X_OAUTH_CLIENT_ID'] ?? null;
     $customClientSecret = $_SERVER['HTTP_X_OAUTH_CLIENT_SECRET'] ?? null;
-    
     // If no custom credentials in headers, check for domain-specific OAuth app
     if (!$customClientId || !$customClientSecret) {
         $domainCredentials = getOAuthCredentialsForDomain($service, $originDomain);
@@ -57,7 +56,6 @@ if (isset($_GET['service']) && isset($_GET['login']) && isset($_GET['scopes'])) 
             $customClientSecret = $customClientSecret ?? $domainCredentials['client_secret'];
         }
     }
-    
     // Validate service is supported
     $supportedServices = ['twitch', 'discord'];
     if (!in_array($service, $supportedServices)) {
@@ -109,12 +107,16 @@ if (isset($_GET['service']) && isset($_GET['login']) && isset($_GET['scopes'])) 
  * Build Twitch OAuth authorization URL
  */
 function buildTwitchAuthUrl($scopes, $customClientId = null, $originDomain = null) {
-    // Use custom client ID if provided, otherwise try domain-specific, then default
+    // Use custom client ID if provided, otherwise try domain-specific (which includes owner's default)
     if (!$customClientId && $originDomain) {
         $domainCreds = getOAuthCredentialsForDomain('twitch', $originDomain);
         $customClientId = $domainCreds['client_id'] ?? null;
     }
-    $clientId = $customClientId ?? TWITCH_CLIENT_ID;
+    // If still no client ID, error out
+    if (!$customClientId) {
+        die('Error: No OAuth credentials configured for Twitch. Please contact the domain owner.');
+    }
+    $clientId = $customClientId;
     $params = [
         'client_id' => $clientId,
         'redirect_uri' => REDIRECT_URI,
@@ -130,12 +132,16 @@ function buildTwitchAuthUrl($scopes, $customClientId = null, $originDomain = nul
  * Build Discord OAuth authorization URL
  */
 function buildDiscordAuthUrl($scopes, $customClientId = null, $originDomain = null) {
-    // Use custom client ID if provided, otherwise try domain-specific, then default
+    // Use custom client ID if provided, otherwise try domain-specific (which includes owner's default)
     if (!$customClientId && $originDomain) {
         $domainCreds = getOAuthCredentialsForDomain('discord', $originDomain);
         $customClientId = $domainCreds['client_id'] ?? null;
     }
-    $clientId = $customClientId ?? DISCORD_CLIENT_ID;
+    // If still no client ID, error out
+    if (!$customClientId) {
+        die('Error: No OAuth credentials configured for Discord. Please contact the domain owner.');
+    }
+    $clientId = $customClientId;
     $params = [
         'client_id' => $clientId,
         'redirect_uri' => REDIRECT_URI,
