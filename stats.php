@@ -8,7 +8,8 @@ if (!isset($_SESSION['user_id'])) {
 }
 
 $userLogin = $_SESSION['user_login'];
-$isWhitelisted = isWhitelistedUser($userLogin);
+$twitchId = $_SESSION['user_id'];
+$isWhitelisted = isWhitelistedUser($twitchId);
 
 if (!$isWhitelisted) {
     header('Location: /dashboard.php');
@@ -95,7 +96,6 @@ $uniqueUsers = $uniqueUsersResult->fetch_assoc();
             <a href="/dashboard.php" class="btn btn-small bg-primary zero-margin"><i class="fas fa-arrow-left"></i> Dashboard</a>
             <a href="?logout=1" class="btn btn-logout zero-margin">Logout</a>
         </div>
-
         <!-- Overall Statistics -->
         <div class="info-box">
             <h3><i class="fas fa-chart-bar"></i> Overall Statistics</h3>
@@ -133,7 +133,6 @@ $uniqueUsers = $uniqueUsersResult->fetch_assoc();
             </div>
             <?php endif; ?>
         </div>
-
         <!-- By Domain -->
         <div class="info-box">
             <h3><i class="fas fa-globe"></i> Authentication by Domain</h3>
@@ -165,7 +164,6 @@ $uniqueUsers = $uniqueUsersResult->fetch_assoc();
                 </table>
             </div>
         </div>
-
         <!-- By Service -->
         <div class="info-box">
             <h3><i class="fas fa-server"></i> Authentication by Service</h3>
@@ -195,7 +193,6 @@ $uniqueUsers = $uniqueUsersResult->fetch_assoc();
                 </table>
             </div>
         </div>
-
         <!-- Recent Failures -->
         <?php if ($failuresResult->num_rows > 0): ?>
         <div class="info-box">
@@ -226,7 +223,6 @@ $uniqueUsers = $uniqueUsersResult->fetch_assoc();
             </div>
         </div>
         <?php endif; ?>
-
         <div class="footer">
             <p>&copy; <?php echo date('Y'); ?> StreamersConnect - Part of the StreamingTools Ecosystem</p>
         </div>
