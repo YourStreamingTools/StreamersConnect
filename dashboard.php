@@ -78,10 +78,22 @@ if ($isWhitelisted) {
                 $client_id = $_POST['client_id'] ?? '';
                 $client_secret = $_POST['client_secret'] ?? '';
                 $is_default = isset($_POST['is_default']) ? 1 : 0;
+                $domain_ids = isset($_POST['domain_ids']) ? json_decode($_POST['domain_ids'], true) : [];
                 $stmt = $conn->prepare("INSERT INTO oauth_applications (user_id, user_login, service, app_name, client_id, client_secret, is_default) VALUES (?, ?, ?, ?, ?, ?, ?)");
                 $stmt->bind_param('ssssssi', $twitchId, $userLogin, $service, $app_name, $client_id, $client_secret, $is_default);
                 $ok = $stmt->execute();
+                $newAppId = $conn->insert_id;
                 $stmt->close();
+                // Assign domains to this OAuth app if not default
+                if ($ok && !$is_default && !empty($domain_ids)) {
+                    $updateStmt = $conn->prepare("UPDATE user_allowed_domains SET oauth_app_id=? WHERE id=? AND twitch_id=?");
+                    foreach ($domain_ids as $domainId) {
+                        $domainId = intval($domainId);
+                        $updateStmt->bind_param('iis', $newAppId, $domainId, $twitchId);
+                        $updateStmt->execute();
+                    }
+                    $updateStmt->close();
+                }
                 header('Content-Type: application/json');
                 echo json_encode(['success' => $ok]);
                 exit;
@@ -92,10 +104,26 @@ if ($isWhitelisted) {
                 $client_id = $_POST['client_id'] ?? '';
                 $client_secret = $_POST['client_secret'] ?? '';
                 $is_default = isset($_POST['is_default']) ? 1 : 0;
+                $domain_ids = isset($_POST['domain_ids']) ? json_decode($_POST['domain_ids'], true) : [];
                 $stmt = $conn->prepare("UPDATE oauth_applications SET service=?, app_name=?, client_id=?, client_secret=?, is_default=? WHERE id=? AND user_login=?");
                 $stmt->bind_param('ssssiis', $service, $app_name, $client_id, $client_secret, $is_default, $id, $userLogin);
                 $ok = $stmt->execute();
                 $stmt->close();
+                // Clear old domain assignments for this app
+                $clearStmt = $conn->prepare("UPDATE user_allowed_domains SET oauth_app_id=NULL WHERE oauth_app_id=? AND twitch_id=?");
+                $clearStmt->bind_param('is', $id, $twitchId);
+                $clearStmt->execute();
+                $clearStmt->close();
+                // Assign selected domains if not default
+                if ($ok && !$is_default && !empty($domain_ids)) {
+                    $updateStmt = $conn->prepare("UPDATE user_allowed_domains SET oauth_app_id=? WHERE id=? AND twitch_id=?");
+                    foreach ($domain_ids as $domainId) {
+                        $domainId = intval($domainId);
+                        $updateStmt->bind_param('iis', $id, $domainId, $twitchId);
+                        $updateStmt->execute();
+                    }
+                    $updateStmt->close();
+                }
                 header('Content-Type: application/json');
                 echo json_encode(['success' => $ok]);
                 exit;
@@ -391,6 +419,15 @@ if ($isWhitelisted) {
                                 </label>
                                 <p class="help">If checked, this will be used when no custom OAuth credentials are provided via headers. Scopes are specified per authentication request via the <code>&scopes=</code> URL parameter.</p>
                             </div>
+                            <div class="field" id="domainSelectorField" style="display: none;">
+                                <label class="label">Assign to Specific Domains</label>
+                                <div class="control">
+                                    <div id="domainCheckboxList" class="box" style="max-height: 200px; overflow-y: auto;">
+                                        <p class="has-text-grey-light">Loading domains...</p>
+                                    </div>
+                                </div>
+                                <p class="help">Select which domains should use this OAuth application. Unselected domains will use the default OAuth application.</p>
+                            </div>
                         </section>
                         <footer class="modal-card-foot">
                             <div class="buttons">
@@ -484,8 +521,45 @@ if ($isWhitelisted) {
                 document.getElementById('modalClientId').value = (app && app.client_id) ? app.client_id : '';
                 document.getElementById('modalClientSecret').value = (app && app.client_secret) ? app.client_secret : '';
                 document.getElementById('modalIsDefault').checked = (app && app.is_default) ? true : false;
+                // Load domains for selection
+                loadDomainsForOAuthApp(edit, app);
+                // Setup checkbox handler for is_default
+                const isDefaultCheckbox = document.getElementById('modalIsDefault');
+                const domainSelectorField = document.getElementById('domainSelectorField');
+                // Show/hide domain selector based on is_default
+                domainSelectorField.style.display = isDefaultCheckbox.checked ? 'none' : 'block';
+                isDefaultCheckbox.onchange = function() {
+                    domainSelectorField.style.display = this.checked ? 'none' : 'block';
+                };
                 // Show modal using Bulma pattern
                 openModal(modal);
+            }
+            function loadDomainsForOAuthApp(edit, app) {
+                const domainCheckboxList = document.getElementById('domainCheckboxList');
+                fetch('?domain=1', {
+                    method: 'POST',
+                    body: new URLSearchParams({action: 'list'})
+                })
+                .then(r => r.json())
+                .then(res => {
+                    if (!res.success || !res.domains.length) {
+                        domainCheckboxList.innerHTML = '<p class="has-text-grey-light"><i class="fas fa-info-circle"></i> No domains configured. Add domains first to assign them to specific OAuth applications.</p>';
+                        return;
+                    }
+                    let html = '';
+                    res.domains.forEach(domain => {
+                        const isAssigned = edit && app && domain.oauth_app_id == app.id;
+                        html += `
+                            <label class="checkbox" style="display: block; margin-bottom: 0.5rem;">
+                                <input type="checkbox" class="domain-checkbox" value="${domain.id}" ${isAssigned ? 'checked' : ''}>
+                                <strong>${domain.domain}</strong>
+                                ${domain.notes ? `<span class="has-text-grey"> - ${domain.notes}</span>` : ''}
+                            </label>
+                        `;
+                    });
+                    
+                    domainCheckboxList.innerHTML = html;
+                });
             }
             function saveOAuthApp() {
                 const editMode = document.getElementById('modalEditMode').value === '1';
@@ -514,6 +588,14 @@ if ($isWhitelisted) {
                 data.append('client_id', clientId);
                 data.append('client_secret', clientSecret);
                 if (isDefault) data.append('is_default', '1');
+                // Get selected domain IDs if not default
+                if (!isDefault) {
+                    const selectedDomains = Array.from(document.querySelectorAll('.domain-checkbox:checked'))
+                        .map(cb => cb.value);
+                    if (selectedDomains.length > 0) {
+                        data.append('domain_ids', JSON.stringify(selectedDomains));
+                    }
+                }
                 fetch('?oauth_app=1', {
                     method: 'POST',
                     body: data
@@ -531,6 +613,7 @@ if ($isWhitelisted) {
                     if (res.success) {
                         closeModal(document.getElementById('oauthAppModal'));
                         renderOAuthApps();
+                        renderDomains(); // Refresh domains to show updated assignments
                     }
                 });
             }
