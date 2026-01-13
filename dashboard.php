@@ -18,13 +18,52 @@ if (isset($_GET['logout'])) {
 }
 // Check if user is whitelisted
 $userLogin = $_SESSION['user_login'];
-$isWhitelisted = isWhitelistedUser($userLogin);
+$twitchId = $_SESSION['user_id'];
+
+// Debug: Log the values being checked
+error_log("Dashboard whitelist check - user_login: " . $userLogin . ", twitch_id: " . $twitchId);
+
+$isWhitelisted = isWhitelistedUser($twitchId);
+
+// If not whitelisted by ID, check if they're whitelisted by username (for migration)
+if (!$isWhitelisted) {
+    $conn = getStreamersConnectDB();
+    if ($conn) {
+        $stmt = $conn->prepare("SELECT id FROM dashboard_whitelist WHERE user_login = ? AND (twitch_id IS NULL OR twitch_id = '')");
+        $stmt->bind_param('s', $userLogin);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        if ($result->num_rows > 0) {
+            // Migrate: Update the record with twitch_id
+            $stmt2 = $conn->prepare("UPDATE dashboard_whitelist SET twitch_id = ?, display_name = ?, email = ?, last_login = NOW() WHERE user_login = ?");
+            $stmt2->bind_param('ssss', $twitchId, $_SESSION['user_display_name'], $_SESSION['user_email'], $userLogin);
+            $stmt2->execute();
+            $stmt2->close();
+            $isWhitelisted = true;
+        }
+        $stmt->close();
+    }
+}
+
+// If whitelisted, update their info in the database
+if ($isWhitelisted) {
+    $conn = getStreamersConnectDB();
+    if ($conn) {
+        // Update whitelist table with current session data
+        $stmt = $conn->prepare("UPDATE dashboard_whitelist SET user_login = ?, display_name = ?, email = ?, last_login = NOW() WHERE twitch_id = ?");
+        $stmt->bind_param('ssss', $userLogin, $_SESSION['user_display_name'], $_SESSION['user_email'], $twitchId);
+        $stmt->execute();
+        $stmt->close();
+    }
+}
+
 // If whitelisted, fetch real data
 $twitchScopes = 'user:read:email';
 $discordScopes = 'identify email guilds';
 if ($isWhitelisted) {
     $conn = getStreamersConnectDB();
     if ($conn) {
+        // Service config fetch
         $stmt = $conn->prepare("SELECT twitch_scopes, discord_scopes FROM user_service_config WHERE user_login = ? LIMIT 1");
         $stmt->bind_param('s', $userLogin);
         $stmt->execute();
@@ -34,7 +73,129 @@ if ($isWhitelisted) {
             $discordScopes = $dbDiscord ?: $discordScopes;
         }
         $stmt->close();
-        // AJAX save handler
+        // --- OAUTH APP AJAX HANDLERS ---
+        if (isset($_GET['oauth_app']) && $_SERVER['REQUEST_METHOD'] === 'POST') {
+            $action = $_POST['action'] ?? '';
+            if ($action === 'create') {
+                $service = $_POST['service'] ?? '';
+                $app_name = $_POST['app_name'] ?? '';
+                $client_id = $_POST['client_id'] ?? '';
+                $client_secret = $_POST['client_secret'] ?? '';
+                $redirect_uris = $_POST['redirect_uris'] ?? '';
+                $scopes = $_POST['scopes'] ?? '';
+                $stmt = $conn->prepare("INSERT INTO user_oauth_applications (user_login, service, app_name, client_id, client_secret, redirect_uris, scopes) VALUES (?, ?, ?, ?, ?, ?, ?)");
+                $stmt->bind_param('sssssss', $userLogin, $service, $app_name, $client_id, $client_secret, $redirect_uris, $scopes);
+                $ok = $stmt->execute();
+                $stmt->close();
+                header('Content-Type: application/json');
+                echo json_encode(['success' => $ok]);
+                exit;
+            } elseif ($action === 'edit') {
+                $id = intval($_POST['id'] ?? 0);
+                $service = $_POST['service'] ?? '';
+                $app_name = $_POST['app_name'] ?? '';
+                $client_id = $_POST['client_id'] ?? '';
+                $client_secret = $_POST['client_secret'] ?? '';
+                $redirect_uris = $_POST['redirect_uris'] ?? '';
+                $scopes = $_POST['scopes'] ?? '';
+                $stmt = $conn->prepare("UPDATE user_oauth_applications SET service=?, app_name=?, client_id=?, client_secret=?, redirect_uris=?, scopes=? WHERE id=? AND user_login=?");
+                $stmt->bind_param('ssssssis', $service, $app_name, $client_id, $client_secret, $redirect_uris, $scopes, $id, $userLogin);
+                $ok = $stmt->execute();
+                $stmt->close();
+                header('Content-Type: application/json');
+                echo json_encode(['success' => $ok]);
+                exit;
+            } elseif ($action === 'delete') {
+                $id = intval($_POST['id'] ?? 0);
+                $stmt = $conn->prepare("DELETE FROM user_oauth_applications WHERE id=? AND user_login=?");
+                $stmt->bind_param('is', $id, $userLogin);
+                $ok = $stmt->execute();
+                $stmt->close();
+                header('Content-Type: application/json');
+                echo json_encode(['success' => $ok]);
+                exit;
+            } elseif ($action === 'list') {
+                $apps = [];
+                $stmt = $conn->prepare("SELECT id, service, app_name, client_id, client_secret, redirect_uris, scopes FROM user_oauth_applications WHERE user_login=? ORDER BY id DESC");
+                $stmt->bind_param('s', $userLogin);
+                $stmt->execute();
+                $result = $stmt->get_result();
+                while ($row = $result->fetch_assoc()) {
+                    $apps[] = $row;
+                }
+                $stmt->close();
+                header('Content-Type: application/json');
+                echo json_encode(['success' => true, 'apps' => $apps]);
+                exit;
+            }
+        }
+        // --- END OAUTH APP AJAX HANDLERS ---
+        
+        // --- DOMAIN MANAGEMENT AJAX HANDLERS ---
+        if (isset($_GET['domain']) && $_SERVER['REQUEST_METHOD'] === 'POST') {
+            $action = $_POST['action'] ?? '';
+            if ($action === 'create') {
+                $domain = trim($_POST['domain'] ?? '');
+                $notes = trim($_POST['notes'] ?? '');
+                if ($domain) {
+                    $stmt = $conn->prepare("INSERT INTO user_allowed_domains (twitch_id, domain, notes) VALUES (?, ?, ?)");
+                    $stmt->bind_param('sss', $twitchId, $domain, $notes);
+                    $ok = $stmt->execute();
+                    $stmt->close();
+                    header('Content-Type: application/json');
+                    echo json_encode(['success' => $ok]);
+                } else {
+                    header('Content-Type: application/json');
+                    echo json_encode(['success' => false]);
+                }
+                exit;
+            } elseif ($action === 'edit') {
+                $id = intval($_POST['id'] ?? 0);
+                $domain = trim($_POST['domain'] ?? '');
+                $notes = trim($_POST['notes'] ?? '');
+                if ($id && $domain) {
+                    $stmt = $conn->prepare("UPDATE user_allowed_domains SET domain=?, notes=? WHERE id=? AND twitch_id=?");
+                    $stmt->bind_param('ssis', $domain, $notes, $id, $twitchId);
+                    $ok = $stmt->execute();
+                    $stmt->close();
+                    header('Content-Type: application/json');
+                    echo json_encode(['success' => $ok]);
+                } else {
+                    header('Content-Type: application/json');
+                    echo json_encode(['success' => false]);
+                }
+                exit;
+            } elseif ($action === 'delete') {
+                $id = intval($_POST['id'] ?? 0);
+                if ($id) {
+                    $stmt = $conn->prepare("DELETE FROM user_allowed_domains WHERE id=? AND twitch_id=?");
+                    $stmt->bind_param('is', $id, $twitchId);
+                    $ok = $stmt->execute();
+                    $stmt->close();
+                    header('Content-Type: application/json');
+                    echo json_encode(['success' => $ok]);
+                } else {
+                    header('Content-Type: application/json');
+                    echo json_encode(['success' => false]);
+                }
+                exit;
+            } elseif ($action === 'list') {
+                $stmt = $conn->prepare("SELECT id, domain, notes, created_at FROM user_allowed_domains WHERE twitch_id=? ORDER BY domain ASC");
+                $stmt->bind_param('s', $twitchId);
+                $stmt->execute();
+                $result = $stmt->get_result();
+                $domains = [];
+                while ($row = $result->fetch_assoc()) {
+                    $domains[] = $row;
+                }
+                $stmt->close();
+                header('Content-Type: application/json');
+                echo json_encode(['success' => true, 'domains' => $domains]);
+                exit;
+            }
+        }
+        // --- END DOMAIN MANAGEMENT AJAX HANDLERS ---
+        // AJAX save handler (service config)
         if (isset($_GET['save']) && $_SERVER['REQUEST_METHOD'] === 'POST') {
             $newTwitch = trim($_POST['twitch_scopes'] ?? 'user:read:email');
             $newDiscord = trim($_POST['discord_scopes'] ?? 'identify email guilds');
@@ -46,6 +207,16 @@ if ($isWhitelisted) {
             echo json_encode(['success' => $ok]);
             exit;
         }
+        // Fetch user's OAuth apps for display
+        $userOAuthApps = [];
+        $stmt = $conn->prepare("SELECT id, service, app_name, client_id, client_secret, redirect_uris, scopes FROM user_oauth_applications WHERE user_login=? ORDER BY id DESC");
+        $stmt->bind_param('s', $userLogin);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        while ($row = $result->fetch_assoc()) {
+            $userOAuthApps[] = $row;
+        }
+        $stmt->close();
     }
 }
 $authStats = null;
@@ -119,10 +290,13 @@ if ($isWhitelisted) {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Dashboard Preview - StreamersConnect</title>
+    <title>Partner Dashboard - StreamersConnect</title>
     <link rel="icon" href="https://cdn.yourstreamingtools.com/img/logo.ico">
     <link rel="apple-touch-icon" href="https://cdn.yourstreamingtools.com/img/logo.ico">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.css">
+    <!-- Bulma CSS 1.0.4 -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bulma@1.0.4/css/bulma.min.css">
+    <!-- Custom CSS -->
     <link rel="stylesheet" href="custom.css?v=<?php echo filemtime(__DIR__ . '/custom.css'); ?>">
     <!-- Toastify CSS -->
     <link rel="stylesheet" type="text/css" href="https://cdn.jsdelivr.net/npm/toastify-js/src/toastify.min.css">
@@ -131,7 +305,7 @@ if ($isWhitelisted) {
     <div class="container container-wide">
         <div class="logo"><i class="fas fa-lock"></i></div>
         <h1>StreamersConnect</h1>
-        <p class="subtitle"><?php echo $isWhitelisted ? 'Partner Dashboard' : 'Partner Dashboard Preview'; ?></p>
+        <p class="subtitle">Partner Dashboard</p>
         <div class="center-row">
             <a href="/" class="btn btn-small bg-primary zero-margin"><i class="fas fa-home"></i> Home</a>
             <?php if ($isWhitelisted): ?>
@@ -140,31 +314,432 @@ if ($isWhitelisted) {
             <a href="?logout=1" class="btn btn-logout zero-margin">Logout</a>
         </div>
         <?php if (!$isWhitelisted): ?>
-        <div class="info-box alert-preview">
-            <h3><i class="fas fa-exclamation-triangle"></i> Preview Mode</h3>
-            <p>This is a non-functional preview of the upcoming partner dashboard. All features are disabled and data shown is placeholder content.</p>
+        <div class="hero is-danger">
+            <div class="hero-body">
+                <p class="title">
+                    <i class="fas fa-ban"></i> Access Denied
+                </p>
+                <p class="subtitle" style="color: #000 !important;">
+                    You do not have permission to access this dashboard at this stage.<br>
+                    If you have requested access, this access hasn't been granted yet, if you believe you should've received access by now, please reach out to us via email.
+                </p>
+            </div>
         </div>
-        <?php endif; ?>
+        <?php
+        // Stop execution for non-whitelisted users
+        echo '</div></body></html>';
+        exit;
+        endif;
+        ?>
         <div class="info-box">
             <h3><i class="fas fa-user"></i> Welcome, <?php echo htmlspecialchars($_SESSION['user_display_name']); ?>!</h3>
-            <p>You're logged in with Twitch as <strong><?php echo htmlspecialchars($_SESSION['user_login']); ?></strong></p>
             <?php if ($isWhitelisted): ?>
             <p class="whitelisted-badge"><i class="fas fa-check-circle"></i> You have full dashboard access</p>
             <?php endif; ?>
         </div>
-        <!-- OAuth Application Management Preview -->
+        <!-- OAuth Application Management -->
         <div class="info-box">
             <h3><i class="fas fa-key"></i> OAuth Applications</h3>
             <p class="info-text-white">Manage your OAuth applications and credentials.</p>
-            <div class="app-card">
-                <h4>Application #1 - Production App</h4>
-                <p><strong>Client ID:</strong> abc123***************xyz</p>
-                <p><strong>Redirect URLs:</strong> https://example.com/callback</p>
-                <p><strong>Status:</strong> <span class="status-active">Active</span></p>
-                <button disabled class="btn-disabled mt-10">Edit (Coming Soon)</button>
-            </div>
-            <button disabled class="btn-disabled"><i class="fas fa-plus"></i> Create New Application</button>
+            <?php if ($isWhitelisted): ?>
+                <!-- Bulma Modal for OAuth App -->
+                <div id="oauthAppModal" class="modal">
+                    <div class="modal-background"></div>
+                    <div class="modal-card">
+                        <header class="modal-card-head">
+                            <p class="modal-card-title" id="modalTitle">New OAuth Application</p>
+                            <button class="delete" aria-label="close" onclick="hideOAuthAppModal()"></button>
+                        </header>
+                        <section class="modal-card-body" id="modalBody">
+                            <!-- Form content will be injected here by JS -->
+                        </section>
+                        <footer class="modal-card-foot" id="modalFooter">
+                            <!-- Action buttons will be injected here by JS -->
+                        </footer>
+                    </div>
+                </div>
+                <div id="oauthAppsContainer"></div>
+                <button class="button is-primary is-small mt-10" id="createAppBtn"><i class="fas fa-plus"></i> Create New Application</button>
+            <?php endif; ?>
         </div>
+        <script>
+        // --- OAUTH APP MANAGEMENT ---
+            // --- OAUTH APP MANAGEMENT (Bulma Modal) ---
+            function renderOAuthApps() {
+                fetch('?oauth_app=1', {
+                    method: 'POST',
+                    body: new URLSearchParams({action: 'list'})
+                })
+                .then(r => r.json())
+                .then(res => {
+                    var list = document.getElementById('oauthAppsContainer');
+                    if (!list) return;
+                    if (!res.success) {
+                        list.innerHTML = '<div class="notification is-danger">Failed to load applications.</div>';
+                        return;
+                    }
+                    if (!res.apps.length) {
+                        list.innerHTML = '<div class="notification is-info">No OAuth applications yet.</div>';
+                        return;
+                    }
+                    let html = '';
+                    res.apps.forEach(function(app) {
+                        html += `<div class="box" data-id="${app.id}" style="margin-bottom: 1rem;">
+                            <h4 class="title is-5">${app.app_name} <span class="tag is-primary">${app.service}</span></h4>
+                            <p><strong>Client ID:</strong> ${app.client_id}</p>
+                            <p><strong>Redirect URIs:</strong> ${app.redirect_uris}</p>
+                            <p><strong>Scopes:</strong> ${app.scopes}</p>
+                            <div class="buttons" style="margin-top: 1rem;">
+                                <button class="button is-small is-info oauthAppEditBtn"><i class="fas fa-edit"></i> Edit</button>
+                                <button class="button is-small is-danger oauthAppDeleteBtn"><i class="fas fa-trash"></i> Delete</button>
+                            </div>
+                        </div>`;
+                    });
+                    list.innerHTML = html;
+                });
+            }
+            function showOAuthAppModal(edit, app) {
+                const modal = document.getElementById('oauthAppModal');
+                const modalTitle = document.getElementById('modalTitle');
+                const modalBody = document.getElementById('modalBody');
+                const modalFooter = document.getElementById('modalFooter');
+                // Set modal title
+                modalTitle.textContent = edit ? 'Edit OAuth Application' : 'New OAuth Application';
+                // Build form (use Bulma classes)
+                let formHtml = '';
+                formHtml += '<div class="field">';
+                formHtml += '<label class="label">Service</label>';
+                formHtml += '<div class="control">';
+                formHtml += '<div class="select is-fullwidth">';
+                formHtml += '<select id="modalService">';
+                formHtml += '<option value="twitch"'+((app && app.service==="twitch")?" selected":"")+'>Twitch</option>';
+                formHtml += '<option value="discord"'+((app && app.service==="discord")?" selected":"")+'>Discord</option>';
+                formHtml += '</select>';
+                formHtml += '</div></div></div>';
+                formHtml += '<div class="field">';
+                formHtml += '<label class="label">App Name</label>';
+                formHtml += '<div class="control">';
+                formHtml += '<input class="input" type="text" id="modalAppName" value="'+(app?app.app_name:'')+'" maxlength="64">';
+                formHtml += '</div></div>';
+                formHtml += '<div class="field">';
+                formHtml += '<label class="label">Client ID</label>';
+                formHtml += '<div class="control">';
+                formHtml += '<input class="input" type="text" id="modalClientId" value="'+(app?app.client_id:'')+'" maxlength="128">';
+                formHtml += '</div></div>';
+                formHtml += '<div class="field">';
+                formHtml += '<label class="label">Client Secret</label>';
+                formHtml += '<div class="control">';
+                formHtml += '<input class="input" type="text" id="modalClientSecret" value="'+(app?app.client_secret:'')+'" maxlength="128">';
+                formHtml += '</div></div>';
+                formHtml += '<div class="field">';
+                formHtml += '<label class="label">Redirect URIs (comma separated)</label>';
+                formHtml += '<div class="control">';
+                formHtml += '<input class="input" type="text" id="modalRedirectUris" value="'+(app?app.redirect_uris:'')+'" maxlength="512">';
+                formHtml += '</div></div>';
+                formHtml += '<div class="field">';
+                formHtml += '<label class="label">Scopes</label>';
+                formHtml += '<div class="control">';
+                formHtml += '<input class="input" type="text" id="modalScopes" value="'+(app?app.scopes:'')+'" maxlength="256">';
+                formHtml += '</div></div>';
+                modalBody.innerHTML = formHtml;
+                // Footer buttons
+                let footerHtml = '';
+                footerHtml += '<button class="button is-success" id="modalSaveBtn">'+(edit?'Save Changes':'Create Application')+'</button>';
+                footerHtml += '<button class="button" id="modalCancelBtn">Cancel</button>';
+                modalFooter.innerHTML = footerHtml;
+                // Show modal
+                modal.classList.add('is-active');
+                // Button handlers
+                document.getElementById('modalCancelBtn').onclick = hideOAuthAppModal;
+                document.getElementById('modalSaveBtn').onclick = function() {
+                    // Gather form data
+                    var service = document.getElementById('modalService').value;
+                    var appName = document.getElementById('modalAppName').value.trim();
+                    var clientId = document.getElementById('modalClientId').value.trim();
+                    var clientSecret = document.getElementById('modalClientSecret').value.trim();
+                    var redirectUris = document.getElementById('modalRedirectUris').value.trim();
+                    var scopes = document.getElementById('modalScopes').value.trim();
+                    if (!appName || !clientId || !clientSecret || !redirectUris || !scopes) {
+                        Toastify({
+                            text: "All fields are required",
+                            duration: 3000,
+                            gravity: "top",
+                            position: "right",
+                            backgroundColor: "#ef4444",
+                            stopOnFocus: true
+                        }).showToast();
+                        return;
+                    }
+                    var data = new FormData();
+                    data.append('action', edit ? 'edit' : 'create');
+                    if (edit && app) data.append('id', app.id);
+                    data.append('service', service);
+                    data.append('app_name', appName);
+                    data.append('client_id', clientId);
+                    data.append('client_secret', clientSecret);
+                    data.append('redirect_uris', redirectUris);
+                    data.append('scopes', scopes);
+                    fetch('?oauth_app=1', {
+                        method: 'POST',
+                        body: data
+                    })
+                    .then(r => r.json())
+                    .then(res => {
+                        Toastify({
+                            text: res.success ? (edit ? "Application updated!" : "Application created!") : "Save failed.",
+                            duration: 3000,
+                            gravity: "top",
+                            position: "right",
+                            backgroundColor: res.success ? "#48bb78" : "#ef4444",
+                            stopOnFocus: true
+                        }).showToast();
+                        if (res.success) {
+                            hideOAuthAppModal();
+                            renderOAuthApps();
+                        }
+                    });
+                };
+            }
+            function hideOAuthAppModal() {
+                const modal = document.getElementById('oauthAppModal');
+                modal.classList.remove('is-active');
+            }
+        document.addEventListener('DOMContentLoaded', function() {
+            // OAuth app list
+            if (document.getElementById('oauthAppsContainer')) {
+                renderOAuthApps();
+            }
+            // Create app button
+            var createBtn = document.getElementById('createAppBtn');
+            if (createBtn) {
+                createBtn.addEventListener('click', function() {
+                    showOAuthAppModal(false, null);
+                });
+            }
+            // Close modal when clicking background
+            var modalBg = document.querySelector('#oauthAppModal .modal-background');
+            if (modalBg) {
+                modalBg.addEventListener('click', hideOAuthAppModal);
+            }
+            // Edit/Delete buttons (event delegation)
+            document.body.addEventListener('click', function(e) {
+                if (e.target.classList.contains('oauthAppEditBtn') || e.target.closest('.oauthAppEditBtn')) {
+                    var btn = e.target.classList.contains('oauthAppEditBtn') ? e.target : e.target.closest('.oauthAppEditBtn');
+                    var card = btn.closest('.box');
+                    var id = card.getAttribute('data-id');
+                    fetch('?oauth_app=1', {
+                        method: 'POST',
+                        body: new URLSearchParams({action: 'list'})
+                    })
+                    .then(r => r.json())
+                    .then(res => {
+                        var app = res.apps.find(a => a.id == id);
+                        if (app) showOAuthAppModal(true, app);
+                    });
+                }
+                if (e.target.classList.contains('oauthAppDeleteBtn') || e.target.closest('.oauthAppDeleteBtn')) {
+                    if (!confirm('Delete this application?')) return;
+                    var btn = e.target.classList.contains('oauthAppDeleteBtn') ? e.target : e.target.closest('.oauthAppDeleteBtn');
+                    var card = btn.closest('.box');
+                    var id = card.getAttribute('data-id');
+                    var data = new FormData();
+                    data.append('action', 'delete');
+                    data.append('id', id);
+                    fetch('?oauth_app=1', {
+                        method: 'POST',
+                        body: data
+                    })
+                    .then(r => r.json())
+                    .then(res => {
+                        Toastify({
+                            text: res.success ? "Application deleted!" : "Delete failed.",
+                            duration: 3000,
+                            gravity: "top",
+                            position: "right",
+                            backgroundColor: res.success ? "#48bb78" : "#ef4444",
+                            stopOnFocus: true
+                        }).showToast();
+                        if (res.success) renderOAuthApps();
+                    });
+                }
+            });
+        });
+        
+        // --- DOMAIN MANAGEMENT (Bulma Modal) ---
+        function renderDomains() {
+            fetch('?domain=1', {
+                method: 'POST',
+                body: new URLSearchParams({action: 'list'})
+            })
+            .then(r => r.json())
+            .then(res => {
+                var list = document.getElementById('domainsContainer');
+                if (!list) return;
+                if (!res.success) {
+                    list.innerHTML = '<div class="notification is-danger">Failed to load domains.</div>';
+                    return;
+                }
+                if (!res.domains.length) {
+                    list.innerHTML = '<div class="notification is-info">No domains configured yet.</div>';
+                    return;
+                }
+                let html = '';
+                res.domains.forEach(function(domain) {
+                    html += `<div class="box" data-id="${domain.id}" style="margin-bottom: 1rem;">
+                        <h4 class="title is-5"><i class="fas fa-globe"></i> ${domain.domain}</h4>
+                        ${domain.notes ? `<p><strong>Notes:</strong> ${domain.notes}</p>` : ''}
+                        <p class="is-size-7 has-text-grey">Added: ${new Date(domain.created_at).toLocaleDateString()}</p>
+                        <div class="buttons" style="margin-top: 1rem;">
+                            <button class="button is-small is-info domainEditBtn"><i class="fas fa-edit"></i> Edit</button>
+                            <button class="button is-small is-danger domainDeleteBtn"><i class="fas fa-trash"></i> Delete</button>
+                        </div>
+                    </div>`;
+                });
+                list.innerHTML = html;
+            });
+        }
+
+        function showDomainModal(edit, domain) {
+            const modal = document.getElementById('domainModal');
+            const modalTitle = document.getElementById('domainModalTitle');
+            const modalBody = document.getElementById('domainModalBody');
+            const modalFooter = document.getElementById('domainModalFooter');
+            
+            modalTitle.textContent = edit ? 'Edit Domain' : 'Add New Domain';
+            
+            let formHtml = '';
+            formHtml += '<div class="field">';
+            formHtml += '<label class="label">Domain</label>';
+            formHtml += '<div class="control">';
+            formHtml += '<input class="input" type="text" id="modalDomain" value="'+(domain?domain.domain:'')+'" placeholder="example.com" maxlength="255">';
+            formHtml += '</div></div>';
+            formHtml += '<div class="field">';
+            formHtml += '<label class="label">Notes (optional)</label>';
+            formHtml += '<div class="control">';
+            formHtml += '<textarea class="textarea" id="modalDomainNotes" maxlength="500">'+(domain?domain.notes:'')+'</textarea>';
+            formHtml += '</div></div>';
+            modalBody.innerHTML = formHtml;
+            
+            let footerHtml = '';
+            footerHtml += '<button class="button is-success" id="domainModalSaveBtn">'+(edit?'Save Changes':'Add Domain')+'</button>';
+            footerHtml += '<button class="button" id="domainModalCancelBtn">Cancel</button>';
+            modalFooter.innerHTML = footerHtml;
+            
+            modal.classList.add('is-active');
+            
+            document.getElementById('domainModalCancelBtn').onclick = hideDomainModal;
+            document.getElementById('domainModalSaveBtn').onclick = function() {
+                var domainValue = document.getElementById('modalDomain').value.trim();
+                var notes = document.getElementById('modalDomainNotes').value.trim();
+                
+                if (!domainValue) {
+                    Toastify({
+                        text: "Domain is required",
+                        duration: 3000,
+                        gravity: "top",
+                        position: "right",
+                        backgroundColor: "#ef4444",
+                        stopOnFocus: true
+                    }).showToast();
+                    return;
+                }
+                
+                var data = new FormData();
+                data.append('action', edit ? 'edit' : 'create');
+                if (edit && domain) data.append('id', domain.id);
+                data.append('domain', domainValue);
+                data.append('notes', notes);
+                
+                fetch('?domain=1', {
+                    method: 'POST',
+                    body: data
+                })
+                .then(r => r.json())
+                .then(res => {
+                    Toastify({
+                        text: res.success ? (edit ? "Domain updated!" : "Domain added!") : "Save failed.",
+                        duration: 3000,
+                        gravity: "top",
+                        position: "right",
+                        backgroundColor: res.success ? "#48bb78" : "#ef4444",
+                        stopOnFocus: true
+                    }).showToast();
+                    if (res.success) {
+                        hideDomainModal();
+                        renderDomains();
+                    }
+                });
+            };
+        }
+
+        function hideDomainModal() {
+            const modal = document.getElementById('domainModal');
+            modal.classList.remove('is-active');
+        }
+
+        document.addEventListener('DOMContentLoaded', function() {
+            // Domain management
+            if (document.getElementById('domainsContainer')) {
+                renderDomains();
+            }
+            
+            var createDomainBtn = document.getElementById('createDomainBtn');
+            if (createDomainBtn) {
+                createDomainBtn.addEventListener('click', function() {
+                    showDomainModal(false, null);
+                });
+            }
+            
+            var domainModalBg = document.querySelector('#domainModal .modal-background');
+            if (domainModalBg) {
+                domainModalBg.addEventListener('click', hideDomainModal);
+            }
+            
+            // Domain edit/delete buttons (event delegation)
+            document.body.addEventListener('click', function(e) {
+                if (e.target.classList.contains('domainEditBtn') || e.target.closest('.domainEditBtn')) {
+                    var btn = e.target.classList.contains('domainEditBtn') ? e.target : e.target.closest('.domainEditBtn');
+                    var card = btn.closest('.box');
+                    var id = card.getAttribute('data-id');
+                    fetch('?domain=1', {
+                        method: 'POST',
+                        body: new URLSearchParams({action: 'list'})
+                    })
+                    .then(r => r.json())
+                    .then(res => {
+                        var domain = res.domains.find(d => d.id == id);
+                        if (domain) showDomainModal(true, domain);
+                    });
+                }
+                if (e.target.classList.contains('domainDeleteBtn') || e.target.closest('.domainDeleteBtn')) {
+                    if (!confirm('Delete this domain?')) return;
+                    var btn = e.target.classList.contains('domainDeleteBtn') ? e.target : e.target.closest('.domainDeleteBtn');
+                    var card = btn.closest('.box');
+                    var id = card.getAttribute('data-id');
+                    var data = new FormData();
+                    data.append('action', 'delete');
+                    data.append('id', id);
+                    fetch('?domain=1', {
+                        method: 'POST',
+                        body: data
+                    })
+                    .then(r => r.json())
+                    .then(res => {
+                        Toastify({
+                            text: res.success ? "Domain deleted!" : "Delete failed.",
+                            duration: 3000,
+                            gravity: "top",
+                            position: "right",
+                            backgroundColor: res.success ? "#48bb78" : "#ef4444",
+                            stopOnFocus: true
+                        }).showToast();
+                        if (res.success) renderDomains();
+                    });
+                }
+            });
+        });
+
+        </script>
         <!-- Analytics -->
         <div class="info-box">
             <h3><i class="fas fa-chart-bar"></i> Authentication Analytics</h3>
@@ -296,6 +871,31 @@ if ($isWhitelisted) {
             </div>
         </div>
         <?php endif; ?>
+        <!-- Allowed Domains Management -->
+        <div class="info-box">
+            <h3><i class="fas fa-globe"></i> Allowed Domains</h3>
+            <p class="info-text-white">Manage domains authorized to use your OAuth applications.</p>
+            <?php if ($isWhitelisted): ?>
+                <!-- Bulma Modal for Domain -->
+                <div id="domainModal" class="modal">
+                    <div class="modal-background"></div>
+                    <div class="modal-card">
+                        <header class="modal-card-head">
+                            <p class="modal-card-title" id="domainModalTitle">New Domain</p>
+                            <button class="delete" aria-label="close" onclick="hideDomainModal()"></button>
+                        </header>
+                        <section class="modal-card-body" id="domainModalBody">
+                            <!-- Form content will be injected here by JS -->
+                        </section>
+                        <footer class="modal-card-foot" id="domainModalFooter">
+                            <!-- Action buttons will be injected here by JS -->
+                        </footer>
+                    </div>
+                </div>
+                <div id="domainsContainer"></div>
+                <button class="button is-primary is-small mt-10" id="createDomainBtn"><i class="fas fa-plus"></i> Add Domain</button>
+            <?php endif; ?>
+        </div>
         <!-- Service Configuration -->
         <div class="info-box">
             <h3><i class="fas fa-cog"></i> Service Configuration</h3>
@@ -310,7 +910,7 @@ if ($isWhitelisted) {
                     <label class="label-white"><i class="fab fa-discord service-discord"></i> Discord Scopes</label>
                     <input type="text" name="discord_scopes" id="discord_scopes" value="<?php echo htmlspecialchars($discordScopes); ?>" class="input-disabled" style="background:#fff;color:#1a202c;" autocomplete="off">
                 </div>
-                <button type="submit" class="btn bg-primary">Save Configuration</button>
+                <button type="submit" class="btn btn-save-config">Save Configuration</button>
             </form>
             <?php else: ?>
                 <div class="mb-15">
