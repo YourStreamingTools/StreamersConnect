@@ -130,9 +130,10 @@ if ($isWhitelisted) {
             if ($action === 'create') {
                 $domain = trim($_POST['domain'] ?? '');
                 $notes = trim($_POST['notes'] ?? '');
+                $oauth_app_id = !empty($_POST['oauth_app_id']) ? intval($_POST['oauth_app_id']) : null;
                 if ($domain) {
-                    $stmt = $conn->prepare("INSERT INTO user_allowed_domains (twitch_id, domain, notes) VALUES (?, ?, ?)");
-                    $stmt->bind_param('sss', $twitchId, $domain, $notes);
+                    $stmt = $conn->prepare("INSERT INTO user_allowed_domains (twitch_id, domain, notes, oauth_app_id) VALUES (?, ?, ?, ?)");
+                    $stmt->bind_param('sssi', $twitchId, $domain, $notes, $oauth_app_id);
                     $ok = $stmt->execute();
                     $stmt->close();
                     header('Content-Type: application/json');
@@ -146,9 +147,10 @@ if ($isWhitelisted) {
                 $id = intval($_POST['id'] ?? 0);
                 $domain = trim($_POST['domain'] ?? '');
                 $notes = trim($_POST['notes'] ?? '');
+                $oauth_app_id = !empty($_POST['oauth_app_id']) ? intval($_POST['oauth_app_id']) : null;
                 if ($id && $domain) {
-                    $stmt = $conn->prepare("UPDATE user_allowed_domains SET domain=?, notes=? WHERE id=? AND twitch_id=?");
-                    $stmt->bind_param('ssis', $domain, $notes, $id, $twitchId);
+                    $stmt = $conn->prepare("UPDATE user_allowed_domains SET domain=?, notes=?, oauth_app_id=? WHERE id=? AND twitch_id=?");
+                    $stmt->bind_param('ssiis', $domain, $notes, $oauth_app_id, $id, $twitchId);
                     $ok = $stmt->execute();
                     $stmt->close();
                     header('Content-Type: application/json');
@@ -173,7 +175,14 @@ if ($isWhitelisted) {
                 }
                 exit;
             } elseif ($action === 'list') {
-                $stmt = $conn->prepare("SELECT id, domain, notes, created_at FROM user_allowed_domains WHERE twitch_id=? ORDER BY domain ASC");
+                $stmt = $conn->prepare("
+                    SELECT d.id, d.domain, d.notes, d.created_at, d.oauth_app_id, 
+                           o.app_name, o.service 
+                    FROM user_allowed_domains d 
+                    LEFT JOIN oauth_applications o ON d.oauth_app_id = o.id 
+                    WHERE d.twitch_id=? 
+                    ORDER BY d.domain ASC
+                ");
                 $stmt->bind_param('s', $twitchId);
                 $stmt->execute();
                 $result = $stmt->get_result();
@@ -629,6 +638,7 @@ if ($isWhitelisted) {
                             <thead>
                                 <tr>
                                     <th><i class="fas fa-globe"></i> Domain</th>
+                                    <th>OAuth Application</th>
                                     <th>Notes</th>
                                     <th>Added</th>
                                     <th class="has-text-centered">Actions</th>
@@ -639,9 +649,17 @@ if ($isWhitelisted) {
                     const addedDate = new Date(domain.created_at).toLocaleDateString();
                     const notes = domain.notes ? domain.notes : '<em class="has-text-grey-light">No notes</em>';
                     const domainJson = JSON.stringify(domain).replace(/"/g, '&quot;');
+                    
+                    let oauthAppDisplay = '<span class="tag is-info"><i class="fas fa-globe"></i> Default</span>';
+                    if (domain.oauth_app_id && domain.app_name) {
+                        const serviceIcon = domain.service === 'twitch' ? '<i class="fab fa-twitch"></i>' : '<i class="fab fa-discord"></i>';
+                        oauthAppDisplay = `<span class="tag is-primary">${serviceIcon} ${domain.app_name}</span>`;
+                    }
+                    
                     html += `
                         <tr data-id="${domain.id}">
                             <td><strong>${domain.domain}</strong></td>
+                            <td>${oauthAppDisplay}</td>
                             <td>${notes}</td>
                             <td class="is-size-7 has-text-grey-light">${addedDate}</td>
                             <td class="has-text-centered">
@@ -668,70 +686,94 @@ if ($isWhitelisted) {
         function showDomainModal(edit, domain) {
             const modal = document.getElementById('domainModal');
             const modalTitle = document.getElementById('domainModalTitle');
-            const modalBody = document.getElementById('domainModalBody');
-            const modalFooter = document.getElementById('domainModalFooter');
+            const saveBtn = document.getElementById('domainModalSaveBtn');
+            
+            // Set modal title and button text
             modalTitle.textContent = edit ? 'Edit Domain' : 'Add New Domain';
-            let formHtml = '';
-            formHtml += '<div class="field">';
-            formHtml += '<label class="label">Domain</label>';
-            formHtml += '<div class="control">';
-            formHtml += '<input class="input" type="text" id="modalDomain" value="'+(domain?domain.domain:'')+'" placeholder="example.com" maxlength="255">';
-            formHtml += '</div></div>';
-            formHtml += '<div class="field">';
-            formHtml += '<label class="label">Notes (optional)</label>';
-            formHtml += '<div class="control">';
-            formHtml += '<textarea class="textarea" id="modalDomainNotes" maxlength="500">'+(domain?domain.notes:'')+'</textarea>';
-            formHtml += '</div></div>';
-            modalBody.innerHTML = formHtml;
-            let footerHtml = '';
-            footerHtml += '<button class="button is-success" id="domainModalSaveBtn">'+(edit?'Save Changes':'Add Domain')+'</button>';
-            footerHtml += '<button class="button" id="domainModalCancelBtn">Cancel</button>';
-            modalFooter.innerHTML = footerHtml;
-            modal.classList.add('is-active');
-            document.getElementById('domainModalCancelBtn').onclick = hideDomainModal;
-            document.getElementById('domainModalSaveBtn').onclick = function() {
-                var domainValue = document.getElementById('modalDomain').value.trim();
-                var notes = document.getElementById('modalDomainNotes').value.trim();
-                if (!domainValue) {
-                    Toastify({
-                        text: "Domain is required",
-                        duration: 3000,
-                        gravity: "top",
-                        position: "right",
-                        backgroundColor: "#ef4444",
-                        stopOnFocus: true
-                    }).showToast();
-                    return;
+            saveBtn.textContent = edit ? 'Save Changes' : 'Add Domain';
+            
+            // Store edit mode and domain ID
+            document.getElementById('domainEditMode').value = edit ? '1' : '0';
+            document.getElementById('domainId').value = edit && domain ? domain.id : '';
+            
+            // Populate form fields
+            document.getElementById('modalDomain').value = (domain && domain.domain) ? domain.domain : '';
+            document.getElementById('modalDomainNotes').value = (domain && domain.notes) ? domain.notes : '';
+            
+            // Populate OAuth app dropdown
+            const oauthAppSelect = document.getElementById('modalDomainOAuthApp');
+            fetch('?oauth_app=1', {
+                method: 'POST',
+                body: new URLSearchParams({action: 'list'})
+            })
+            .then(r => r.json())
+            .then(res => {
+                // Clear existing options except the default one
+                oauthAppSelect.innerHTML = '<option value="">Use Default OAuth Application</option>';
+                
+                if (res.success && res.apps.length) {
+                    res.apps.forEach(app => {
+                        const option = document.createElement('option');
+                        option.value = app.id;
+                        const serviceIcon = app.service === 'twitch' ? '🟣' : '💬';
+                        option.textContent = `${serviceIcon} ${app.app_name} (${app.service})`;
+                        if (domain && domain.oauth_app_id && app.id == domain.oauth_app_id) {
+                            option.selected = true;
+                        }
+                        oauthAppSelect.appendChild(option);
+                    });
                 }
-                var data = new FormData();
-                data.append('action', edit ? 'edit' : 'create');
-                if (edit && domain) data.append('id', domain.id);
-                data.append('domain', domainValue);
-                data.append('notes', notes);
-                fetch('?domain=1', {
-                    method: 'POST',
-                    body: data
-                })
-                .then(r => r.json())
-                .then(res => {
-                    Toastify({
-                        text: res.success ? (edit ? "Domain updated!" : "Domain added!") : "Save failed.",
-                        duration: 3000,
-                        gravity: "top",
-                        position: "right",
-                        backgroundColor: res.success ? "#48bb78" : "#ef4444",
-                        stopOnFocus: true
-                    }).showToast();
-                    if (res.success) {
-                        hideDomainModal();
-                        renderDomains();
-                    }
-                });
-            };
+                
+                // Show modal using Bulma pattern
+                openModal(modal);
+            });
         }
-        function hideDomainModal() {
-            const modal = document.getElementById('domainModal');
-            modal.classList.remove('is-active');
+        
+        function saveDomain() {
+            const editMode = document.getElementById('domainEditMode').value === '1';
+            const domainId = document.getElementById('domainId').value;
+            const domainValue = document.getElementById('modalDomain').value.trim();
+            const notes = document.getElementById('modalDomainNotes').value.trim();
+            const oauthAppId = document.getElementById('modalDomainOAuthApp').value;
+            
+            if (!domainValue) {
+                Toastify({
+                    text: "Domain is required",
+                    duration: 3000,
+                    gravity: "top",
+                    position: "right",
+                    backgroundColor: "#ef4444",
+                    stopOnFocus: true
+                }).showToast();
+                return;
+            }
+            
+            var data = new FormData();
+            data.append('action', editMode ? 'edit' : 'create');
+            if (editMode && domainId) data.append('id', domainId);
+            data.append('domain', domainValue);
+            data.append('notes', notes);
+            if (oauthAppId) data.append('oauth_app_id', oauthAppId);
+            
+            fetch('?domain=1', {
+                method: 'POST',
+                body: data
+            })
+            .then(r => r.json())
+            .then(res => {
+                Toastify({
+                    text: res.success ? (editMode ? "Domain updated!" : "Domain added!") : "Save failed.",
+                    duration: 3000,
+                    gravity: "top",
+                    position: "right",
+                    backgroundColor: res.success ? "#48bb78" : "#ef4444",
+                    stopOnFocus: true
+                }).showToast();
+                if (res.success) {
+                    closeModal(document.getElementById('domainModal'));
+                    renderDomains();
+                }
+            });
         }
         
         function deleteDomain(id) {
@@ -964,6 +1006,17 @@ if ($isWhitelisted) {
                                 <div class="control">
                                     <textarea class="textarea" id="modalDomainNotes" maxlength="500"></textarea>
                                 </div>
+                            </div>
+                            <div class="field">
+                                <label class="label">OAuth Application</label>
+                                <div class="control">
+                                    <div class="select is-fullwidth">
+                                        <select id="modalDomainOAuthApp">
+                                            <option value="">Use Default OAuth Application</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <p class="help">Select a specific OAuth application for this domain, or leave as default to use the default OAuth credentials.</p>
                             </div>
                         </section>
                         <footer class="modal-card-foot">
