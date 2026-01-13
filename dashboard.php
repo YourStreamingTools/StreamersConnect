@@ -16,15 +16,11 @@ if (isset($_GET['logout'])) {
     header('Location: https://streamersconnect.com/');
     exit;
 }
+
 // Check if user is whitelisted
 $userLogin = $_SESSION['user_login'];
 $twitchId = $_SESSION['user_id'];
-
-// Debug: Log the values being checked
-error_log("Dashboard whitelist check - user_login: " . $userLogin . ", twitch_id: " . $twitchId);
-
 $isWhitelisted = isWhitelistedUser($twitchId);
-
 // If not whitelisted by ID, check if they're whitelisted by username (for migration)
 if (!$isWhitelisted) {
     $conn = getStreamersConnectDB();
@@ -130,7 +126,6 @@ if ($isWhitelisted) {
             }
         }
         // --- END OAUTH APP AJAX HANDLERS ---
-        
         // --- DOMAIN MANAGEMENT AJAX HANDLERS ---
         if (isset($_GET['domain']) && $_SERVER['REQUEST_METHOD'] === 'POST') {
             $action = $_POST['action'] ?? '';
@@ -261,7 +256,7 @@ if ($isWhitelisted) {
             $domainStats[] = $row;
         }
         $stmt->close();
-        // Get recent authentication attempts (last 10)
+        // Get recent authentication attempts (last 5)
         $stmt = $conn->prepare("
             SELECT 
                 service,
@@ -273,7 +268,7 @@ if ($isWhitelisted) {
                 created_at
             FROM auth_logs
             ORDER BY created_at DESC
-            LIMIT 20
+            LIMIT 5
         ");
         $stmt->execute();
         $result = $stmt->get_result();
@@ -564,7 +559,6 @@ if ($isWhitelisted) {
                 }
             });
         });
-        
         // --- DOMAIN MANAGEMENT (Bulma Modal) ---
         function renderDomains() {
             fetch('?domain=1', {
@@ -580,33 +574,57 @@ if ($isWhitelisted) {
                     return;
                 }
                 if (!res.domains.length) {
-                    list.innerHTML = '<div class="notification is-info">No domains configured yet.</div>';
+                    list.innerHTML = '<div class="notification is-info is-light has-text-centered"><i class="fas fa-info-circle"></i> No domains configured yet. Click "Add Domain" below to get started.</div>';
                     return;
                 }
-                let html = '';
+                let html = `
+                    <div class="table-container" style="margin-bottom: 1rem;">
+                        <table class="table is-fullwidth is-striped is-hoverable">
+                            <thead>
+                                <tr>
+                                    <th><i class="fas fa-globe"></i> Domain</th>
+                                    <th>Notes</th>
+                                    <th>Added</th>
+                                    <th class="has-text-centered">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>`;
                 res.domains.forEach(function(domain) {
-                    html += `<div class="box" data-id="${domain.id}" style="margin-bottom: 1rem;">
-                        <h4 class="title is-5"><i class="fas fa-globe"></i> ${domain.domain}</h4>
-                        ${domain.notes ? `<p><strong>Notes:</strong> ${domain.notes}</p>` : ''}
-                        <p class="is-size-7 has-text-grey">Added: ${new Date(domain.created_at).toLocaleDateString()}</p>
-                        <div class="buttons" style="margin-top: 1rem;">
-                            <button class="button is-small is-info domainEditBtn"><i class="fas fa-edit"></i> Edit</button>
-                            <button class="button is-small is-danger domainDeleteBtn"><i class="fas fa-trash"></i> Delete</button>
-                        </div>
-                    </div>`;
+                    const addedDate = new Date(domain.created_at).toLocaleDateString();
+                    const notes = domain.notes ? domain.notes : '<em class="has-text-grey-light">No notes</em>';
+                    const domainJson = JSON.stringify(domain).replace(/"/g, '&quot;');
+                    html += `
+                        <tr data-id="${domain.id}">
+                            <td><strong>${domain.domain}</strong></td>
+                            <td>${notes}</td>
+                            <td class="is-size-7 has-text-grey-light">${addedDate}</td>
+                            <td class="has-text-centered">
+                                <div class="buttons is-centered">
+                                    <button class="button is-small is-info" onclick="showDomainModal(true, ${domainJson})">
+                                        <span class="icon is-small"><i class="fas fa-edit"></i></span>
+                                        <span>Edit</span>
+                                    </button>
+                                    <button class="button is-small is-danger" onclick="deleteDomain(${domain.id})">
+                                        <span class="icon is-small"><i class="fas fa-trash"></i></span>
+                                        <span>Delete</span>
+                                    </button>
+                                </div>
+                            </td>
+                        </tr>`;
                 });
+                html += `
+                            </tbody>
+                        </table>
+                    </div>`;
                 list.innerHTML = html;
             });
         }
-
         function showDomainModal(edit, domain) {
             const modal = document.getElementById('domainModal');
             const modalTitle = document.getElementById('domainModalTitle');
             const modalBody = document.getElementById('domainModalBody');
             const modalFooter = document.getElementById('domainModalFooter');
-            
             modalTitle.textContent = edit ? 'Edit Domain' : 'Add New Domain';
-            
             let formHtml = '';
             formHtml += '<div class="field">';
             formHtml += '<label class="label">Domain</label>';
@@ -619,19 +637,15 @@ if ($isWhitelisted) {
             formHtml += '<textarea class="textarea" id="modalDomainNotes" maxlength="500">'+(domain?domain.notes:'')+'</textarea>';
             formHtml += '</div></div>';
             modalBody.innerHTML = formHtml;
-            
             let footerHtml = '';
             footerHtml += '<button class="button is-success" id="domainModalSaveBtn">'+(edit?'Save Changes':'Add Domain')+'</button>';
             footerHtml += '<button class="button" id="domainModalCancelBtn">Cancel</button>';
             modalFooter.innerHTML = footerHtml;
-            
             modal.classList.add('is-active');
-            
             document.getElementById('domainModalCancelBtn').onclick = hideDomainModal;
             document.getElementById('domainModalSaveBtn').onclick = function() {
                 var domainValue = document.getElementById('modalDomain').value.trim();
                 var notes = document.getElementById('modalDomainNotes').value.trim();
-                
                 if (!domainValue) {
                     Toastify({
                         text: "Domain is required",
@@ -643,13 +657,11 @@ if ($isWhitelisted) {
                     }).showToast();
                     return;
                 }
-                
                 var data = new FormData();
                 data.append('action', edit ? 'edit' : 'create');
                 if (edit && domain) data.append('id', domain.id);
                 data.append('domain', domainValue);
                 data.append('notes', notes);
-                
                 fetch('?domain=1', {
                     method: 'POST',
                     body: data
@@ -671,10 +683,44 @@ if ($isWhitelisted) {
                 });
             };
         }
-
         function hideDomainModal() {
             const modal = document.getElementById('domainModal');
             modal.classList.remove('is-active');
+        }
+        
+        function deleteDomain(id) {
+            if (!confirm('Delete this domain? This cannot be undone.')) return;
+            
+            var data = new FormData();
+            data.append('action', 'delete');
+            data.append('id', id);
+            fetch('?domain=1', {
+                method: 'POST',
+                body: data
+            })
+            .then(r => r.json())
+            .then(res => {
+                Toastify({
+                    text: res.success ? "Domain deleted successfully!" : "Delete failed.",
+                    duration: 3000,
+                    gravity: "top",
+                    position: "right",
+                    backgroundColor: res.success ? "#48bb78" : "#ef4444",
+                    stopOnFocus: true
+                }).showToast();
+                if (res.success) renderDomains();
+            })
+            .catch(err => {
+                console.error('Delete error:', err);
+                Toastify({
+                    text: "Error deleting domain",
+                    duration: 3000,
+                    gravity: "top",
+                    position: "right",
+                    backgroundColor: "#ef4444",
+                    stopOnFocus: true
+                }).showToast();
+            });
         }
 
         document.addEventListener('DOMContentLoaded', function() {
@@ -682,63 +728,17 @@ if ($isWhitelisted) {
             if (document.getElementById('domainsContainer')) {
                 renderDomains();
             }
-            
             var createDomainBtn = document.getElementById('createDomainBtn');
             if (createDomainBtn) {
                 createDomainBtn.addEventListener('click', function() {
                     showDomainModal(false, null);
                 });
             }
-            
             var domainModalBg = document.querySelector('#domainModal .modal-background');
             if (domainModalBg) {
                 domainModalBg.addEventListener('click', hideDomainModal);
             }
-            
-            // Domain edit/delete buttons (event delegation)
-            document.body.addEventListener('click', function(e) {
-                if (e.target.classList.contains('domainEditBtn') || e.target.closest('.domainEditBtn')) {
-                    var btn = e.target.classList.contains('domainEditBtn') ? e.target : e.target.closest('.domainEditBtn');
-                    var card = btn.closest('.box');
-                    var id = card.getAttribute('data-id');
-                    fetch('?domain=1', {
-                        method: 'POST',
-                        body: new URLSearchParams({action: 'list'})
-                    })
-                    .then(r => r.json())
-                    .then(res => {
-                        var domain = res.domains.find(d => d.id == id);
-                        if (domain) showDomainModal(true, domain);
-                    });
-                }
-                if (e.target.classList.contains('domainDeleteBtn') || e.target.closest('.domainDeleteBtn')) {
-                    if (!confirm('Delete this domain?')) return;
-                    var btn = e.target.classList.contains('domainDeleteBtn') ? e.target : e.target.closest('.domainDeleteBtn');
-                    var card = btn.closest('.box');
-                    var id = card.getAttribute('data-id');
-                    var data = new FormData();
-                    data.append('action', 'delete');
-                    data.append('id', id);
-                    fetch('?domain=1', {
-                        method: 'POST',
-                        body: data
-                    })
-                    .then(r => r.json())
-                    .then(res => {
-                        Toastify({
-                            text: res.success ? "Domain deleted!" : "Delete failed.",
-                            duration: 3000,
-                            gravity: "top",
-                            position: "right",
-                            backgroundColor: res.success ? "#48bb78" : "#ef4444",
-                            stopOnFocus: true
-                        }).showToast();
-                        if (res.success) renderDomains();
-                    });
-                }
-            });
         });
-
         </script>
         <!-- Analytics -->
         <div class="info-box">
@@ -809,7 +809,7 @@ if ($isWhitelisted) {
         <!-- Recent Authentication Activity -->
         <div class="info-box">
             <h3><i class="fas fa-history"></i> Recent Authentication Activity</h3>
-            <p class="info-text-white">Last 20 authentication attempts across all domains</p>
+            <p class="info-text-white">Last 5 authentication attempts across all domains</p>
             <div class="table-responsive">
                 <table class="table-dark table-sm">
                     <thead>
