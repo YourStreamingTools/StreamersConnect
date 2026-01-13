@@ -1,3 +1,77 @@
+/* Save Configuration Button */
+.btn-save-config {
+    background: linear-gradient(90deg, #10b981 0%, #667eea 100%) !important;
+    color: #fff !important;
+    border: none;
+    border-radius: 6px;
+    padding: 12px 28px;
+    font-weight: 600;
+    font-size: 1.08em;
+    box-shadow: 0 2px 8px rgba(16,185,129,0.10);
+    margin-bottom: 10px;
+    margin-top: 10px;
+    transition: background 0.2s, box-shadow 0.2s;
+}
+.btn-save-config:hover {
+    background: linear-gradient(90deg, #059669 0%, #764ba2 100%) !important;
+    box-shadow: 0 4px 16px rgba(16,185,129,0.18);
+}
+/* Create New Application Button */
+.btn-create-app {
+    background: linear-gradient(90deg, #764ba2 0%, #667eea 100%) !important;
+    color: #fff !important;
+    border: none;
+    border-radius: 6px;
+    padding: 12px 28px;
+    font-weight: 600;
+    font-size: 1.08em;
+    box-shadow: 0 2px 8px rgba(102,126,234,0.10);
+    margin-bottom: 18px;
+    margin-top: 10px;
+    transition: background 0.2s, box-shadow 0.2s;
+}
+.btn-create-app:hover {
+    background: linear-gradient(90deg, #5f2c82 0%, #49a09d 100%) !important;
+    box-shadow: 0 4px 16px rgba(102,126,234,0.18);
+}
+/* OAuth App Card Action Buttons */
+.btn-edit {
+    background: linear-gradient(90deg, #10b981 0%, #22d3ee 100%) !important;
+    color: #fff !important;
+    border: none;
+    border-radius: 4px;
+    padding: 8px 18px;
+    font-weight: 500;
+    margin-right: 6px;
+    transition: background 0.2s;
+}
+.btn-edit:hover {
+    background: linear-gradient(90deg, #059669 0%, #0ea5e9 100%) !important;
+}
+.btn-delete {
+    background: linear-gradient(90deg, #ef4444 0%, #f59e42 100%) !important;
+    color: #fff !important;
+    border: none;
+    border-radius: 4px;
+    padding: 8px 18px;
+    font-weight: 500;
+    transition: background 0.2s;
+}
+.btn-delete:hover {
+    background: linear-gradient(90deg, #b91c1c 0%, #f59e42 100%) !important;
+}
+/* Info alert for empty states */
+.alert-info {
+    background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+    color: #fff !important;
+    padding: 16px 20px;
+    border-radius: 6px;
+    margin: 16px 0;
+    font-size: 1.05em;
+    text-align: center;
+    box-shadow: 0 2px 8px rgba(102,126,234,0.08);
+    letter-spacing: 0.01em;
+}
 * {
     margin: 0;
     padding: 0;
