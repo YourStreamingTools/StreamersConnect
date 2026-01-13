@@ -341,18 +341,58 @@ if ($isWhitelisted) {
                     <div class="modal-card">
                         <header class="modal-card-head">
                             <p class="modal-card-title" id="modalTitle">New OAuth Application</p>
-                            <button class="delete" aria-label="close" onclick="hideOAuthAppModal()"></button>
+                            <button class="delete" aria-label="close"></button>
                         </header>
-                        <section class="modal-card-body" id="modalBody">
-                            <!-- Form content will be injected here by JS -->
+                        <section class="modal-card-body">
+                            <input type="hidden" id="modalEditMode" value="0">
+                            <input type="hidden" id="modalAppId" value="">
+                            <div class="field">
+                                <label class="label">Service</label>
+                                <div class="control">
+                                    <div class="select is-fullwidth">
+                                        <select id="modalService">
+                                            <option value="twitch">Twitch</option>
+                                            <option value="discord">Discord</option>
+                                        </select>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="field">
+                                <label class="label">App Name</label>
+                                <div class="control">
+                                    <input class="input" type="text" id="modalAppName" maxlength="64" placeholder="My Application">
+                                </div>
+                            </div>
+                            <div class="field">
+                                <label class="label">Client ID</label>
+                                <div class="control">
+                                    <input class="input" type="text" id="modalClientId" maxlength="128" placeholder="your_client_id">
+                                </div>
+                            </div>
+                            <div class="field">
+                                <label class="label">Client Secret</label>
+                                <div class="control">
+                                    <input class="input" type="password" id="modalClientSecret" maxlength="128" placeholder="your_client_secret">
+                                </div>
+                            </div>
+                            <div class="field">
+                                <label class="checkbox">
+                                    <input type="checkbox" id="modalIsDefault">
+                                    Use as default credentials
+                                </label>
+                                <p class="help">If checked, this will be used when no custom OAuth credentials are provided via headers. Scopes are specified per authentication request via the <code>&scopes=</code> URL parameter.</p>
+                            </div>
                         </section>
-                        <footer class="modal-card-foot" id="modalFooter">
-                            <!-- Action buttons will be injected here by JS -->
+                        <footer class="modal-card-foot">
+                            <div class="buttons">
+                                <button class="button is-success" id="modalSaveBtn">Create Application</button>
+                                <button class="button" id="modalCancelBtn">Cancel</button>
+                            </div>
                         </footer>
                     </div>
                 </div>
                 <div id="oauthAppsContainer"></div>
-                <button class="button is-primary is-small mt-10" id="createAppBtn"><i class="fas fa-plus"></i> Create New Application</button>
+                <button class="button is-primary is-small mt-10 js-modal-trigger" data-target="oauthAppModal" id="createAppBtn"><i class="fas fa-plus"></i> Create New Application</button>
             <?php endif; ?>
         </div>
         <script>
@@ -372,163 +412,177 @@ if ($isWhitelisted) {
                         return;
                     }
                     if (!res.apps.length) {
-                        list.innerHTML = '<div class="notification is-info">No OAuth applications yet.</div>';
+                        list.innerHTML = '<div class="notification is-info is-light has-text-centered"><i class="fas fa-info-circle"></i> No OAuth applications yet. Click "Create New Application" below to get started.</div>';
                         return;
                     }
-                    let html = '';
+                    let html = `
+                        <div class="table-container" style="margin-bottom: 1rem;">
+                            <table class="table is-fullwidth is-striped is-hoverable">
+                                <thead>
+                                    <tr>
+                                        <th><i class="fas fa-key"></i> Application Name</th>
+                                        <th>Service</th>
+                                        <th>Client ID</th>
+                                        <th class="has-text-centered">Status</th>
+                                        <th class="has-text-centered">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>`;
                     res.apps.forEach(function(app) {
-                        const defaultBadge = app.is_default ? '<span class="tag is-success ml-2"><i class="fas fa-check-circle"></i> Default</span>' : '';
-                        html += `<div class="box" data-id="${app.id}" style="margin-bottom: 1rem;">
-                            <h4 class="title is-5">${app.app_name} <span class="tag is-primary">${app.service}</span>${defaultBadge}</h4>
-                            <p><strong>Client ID:</strong> ${app.client_id}</p>
-                            <p class="help">Redirects and scopes are determined by the <code>&return_url=</code> and <code>&scopes=</code> parameters in authentication requests</p>
-                            <div class="buttons" style="margin-top: 1rem;">
-                                <button class="button is-small is-info oauthAppEditBtn"><i class="fas fa-edit"></i> Edit</button>
-                                <button class="button is-small is-danger oauthAppDeleteBtn"><i class="fas fa-trash"></i> Delete</button>
-                            </div>
-                        </div>`;
+                        const serviceIcon = app.service === 'twitch' ? '<i class="fab fa-twitch"></i>' : '<i class="fab fa-discord"></i>';
+                        const defaultBadge = app.is_default ? '<span class="tag is-success"><i class="fas fa-check-circle"></i> Default</span>' : '<span class="tag is-light">Custom</span>';
+                        const appJson = JSON.stringify(app).replace(/"/g, '&quot;');
+                        html += `
+                            <tr data-id="${app.id}">
+                                <td><strong>${app.app_name}</strong></td>
+                                <td>${serviceIcon} ${app.service.charAt(0).toUpperCase() + app.service.slice(1)}</td>
+                                <td><code class="is-size-7">${app.client_id}</code></td>
+                                <td class="has-text-centered">${defaultBadge}</td>
+                                <td class="has-text-centered">
+                                    <div class="buttons is-centered">
+                                        <button class="button is-small is-info oauthAppEditBtn" data-app='${appJson}'>
+                                            <span class="icon is-small"><i class="fas fa-edit"></i></span>
+                                            <span>Edit</span>
+                                        </button>
+                                        <button class="button is-small is-danger oauthAppDeleteBtn" data-id="${app.id}">
+                                            <span class="icon is-small"><i class="fas fa-trash"></i></span>
+                                            <span>Delete</span>
+                                        </button>
+                                    </div>
+                                </td>
+                            </tr>`;
                     });
+                    html += `
+                                </tbody>
+                            </table>
+                        </div>`;
                     list.innerHTML = html;
                 });
             }
             function showOAuthAppModal(edit, app) {
                 const modal = document.getElementById('oauthAppModal');
                 const modalTitle = document.getElementById('modalTitle');
-                const modalBody = document.getElementById('modalBody');
-                const modalFooter = document.getElementById('modalFooter');
-                // Set modal title
+                const saveBtn = document.getElementById('modalSaveBtn');
+                // Set modal title and button text
                 modalTitle.textContent = edit ? 'Edit OAuth Application' : 'New OAuth Application';
-                // Build form (use Bulma classes)
-                let formHtml = '';
-                formHtml += '<div class="field">';
-                formHtml += '<label class="label">Service</label>';
-                formHtml += '<div class="control">';
-                formHtml += '<div class="select is-fullwidth">';
-                formHtml += '<select id="modalService">';
-                formHtml += '<option value="twitch"'+((app && app.service==="twitch")?" selected":"")+'>Twitch</option>';
-                formHtml += '<option value="discord"'+((app && app.service==="discord")?" selected":"")+'>Discord</option>';
-                formHtml += '</select>';
-                formHtml += '</div></div></div>';
-                formHtml += '<div class="field">';
-                formHtml += '<label class="label">App Name</label>';
-                formHtml += '<div class="control">';
-                formHtml += '<input class="input" type="text" id="modalAppName" value="'+(app?app.app_name:'')+'" maxlength="64">';
-                formHtml += '</div></div>';
-                formHtml += '<div class="field">';
-                formHtml += '<label class="label">Client ID</label>';
-                formHtml += '<div class="control">';
-                formHtml += '<input class="input" type="text" id="modalClientId" value="'+(app?app.client_id:'')+'" maxlength="128">';
-                formHtml += '</div></div>';
-                formHtml += '<div class="field">';
-                formHtml += '<label class="label">Client Secret</label>';
-                formHtml += '<div class="control">';
-                formHtml += '<input class="input" type="text" id="modalClientSecret" value="'+(app?app.client_secret:'')+'" maxlength="128">';
-                formHtml += '</div></div>';
-                formHtml += '<div class="field">';
-                formHtml += '<label class="checkbox">';
-                formHtml += '<input type="checkbox" id="modalIsDefault" '+((app && app.is_default) ? 'checked' : '')+'>  Use as default credentials';
-                formHtml += '</label>';
-                formHtml += '<p class="help">If checked, this will be used when no custom OAuth credentials are provided via headers. Scopes are specified per authentication request via the <code>&scopes=</code> URL parameter.</p>';
-                formHtml += '</div>';
-                modalBody.innerHTML = formHtml;
-                // Footer buttons
-                let footerHtml = '';
-                footerHtml += '<button class="button is-success" id="modalSaveBtn">'+(edit?'Save Changes':'Create Application')+'</button>';
-                footerHtml += '<button class="button" id="modalCancelBtn">Cancel</button>';
-                modalFooter.innerHTML = footerHtml;
-                // Show modal
-                modal.classList.add('is-active');
-                // Button handlers
-                document.getElementById('modalCancelBtn').onclick = hideOAuthAppModal;
-                document.getElementById('modalSaveBtn').onclick = function() {
-                    // Gather form data
-                    var service = document.getElementById('modalService').value;
-                    var appName = document.getElementById('modalAppName').value.trim();
-                    var clientId = document.getElementById('modalClientId').value.trim();
-                    var clientSecret = document.getElementById('modalClientSecret').value.trim();
-                    var isDefault = document.getElementById('modalIsDefault').checked;
-                    if (!appName || !clientId || !clientSecret) {
-                        Toastify({
-                            text: "App Name, Client ID, and Client Secret are required",
-                            duration: 3000,
-                            gravity: "top",
-                            position: "right",
-                            backgroundColor: "#ef4444",
-                            stopOnFocus: true
-                        }).showToast();
-                        return;
+                saveBtn.textContent = edit ? 'Save Changes' : 'Create Application';
+                // Store edit mode and app ID
+                document.getElementById('modalEditMode').value = edit ? '1' : '0';
+                document.getElementById('modalAppId').value = edit && app ? app.id : '';
+                // Populate form fields
+                document.getElementById('modalService').value = (app && app.service) ? app.service : 'twitch';
+                document.getElementById('modalAppName').value = (app && app.app_name) ? app.app_name : '';
+                document.getElementById('modalClientId').value = (app && app.client_id) ? app.client_id : '';
+                document.getElementById('modalClientSecret').value = (app && app.client_secret) ? app.client_secret : '';
+                document.getElementById('modalIsDefault').checked = (app && app.is_default) ? true : false;
+                // Show modal using Bulma pattern
+                openModal(modal);
+            }
+            function saveOAuthApp() {
+                const editMode = document.getElementById('modalEditMode').value === '1';
+                const appId = document.getElementById('modalAppId').value;
+                const service = document.getElementById('modalService').value;
+                const appName = document.getElementById('modalAppName').value.trim();
+                const clientId = document.getElementById('modalClientId').value.trim();
+                const clientSecret = document.getElementById('modalClientSecret').value.trim();
+                const isDefault = document.getElementById('modalIsDefault').checked;
+                if (!appName || !clientId || !clientSecret) {
+                    Toastify({
+                        text: "App Name, Client ID, and Client Secret are required",
+                        duration: 3000,
+                        gravity: "top",
+                        position: "right",
+                        backgroundColor: "#ef4444",
+                        stopOnFocus: true
+                    }).showToast();
+                    return;
+                }
+                var data = new FormData();
+                data.append('action', editMode ? 'edit' : 'create');
+                if (editMode && appId) data.append('id', appId);
+                data.append('service', service);
+                data.append('app_name', appName);
+                data.append('client_id', clientId);
+                data.append('client_secret', clientSecret);
+                if (isDefault) data.append('is_default', '1');
+                fetch('?oauth_app=1', {
+                    method: 'POST',
+                    body: data
+                })
+                .then(r => r.json())
+                .then(res => {
+                    Toastify({
+                        text: res.success ? (editMode ? "Application updated!" : "Application created!") : "Save failed.",
+                        duration: 3000,
+                        gravity: "top",
+                        position: "right",
+                        backgroundColor: res.success ? "#48bb78" : "#ef4444",
+                        stopOnFocus: true
+                    }).showToast();
+                    if (res.success) {
+                        closeModal(document.getElementById('oauthAppModal'));
+                        renderOAuthApps();
                     }
-                    var data = new FormData();
-                    data.append('action', edit ? 'edit' : 'create');
-                    if (edit && app) data.append('id', app.id);
-                    data.append('service', service);
-                    data.append('app_name', appName);
-                    data.append('client_id', clientId);
-                    data.append('client_secret', clientSecret);
-                    if (isDefault) data.append('is_default', '1');
-                    fetch('?oauth_app=1', {
-                        method: 'POST',
-                        body: data
-                    })
-                    .then(r => r.json())
-                    .then(res => {
-                        Toastify({
-                            text: res.success ? (edit ? "Application updated!" : "Application created!") : "Save failed.",
-                            duration: 3000,
-                            gravity: "top",
-                            position: "right",
-                            backgroundColor: res.success ? "#48bb78" : "#ef4444",
-                            stopOnFocus: true
-                        }).showToast();
-                        if (res.success) {
-                            hideOAuthAppModal();
-                            renderOAuthApps();
-                        }
-                    });
-                };
+                });
             }
-            function hideOAuthAppModal() {
-                const modal = document.getElementById('oauthAppModal');
-                modal.classList.remove('is-active');
-            }
+        // Standard Bulma modal functions
+        function openModal($el) {
+            $el.classList.add('is-active');
+        }
+        function closeModal($el) {
+            $el.classList.remove('is-active');
+        }
+        function closeAllModals() {
+            (document.querySelectorAll('.modal') || []).forEach(($modal) => {
+                closeModal($modal);
+            });
+        }
         document.addEventListener('DOMContentLoaded', function() {
             // OAuth app list
             if (document.getElementById('oauthAppsContainer')) {
                 renderOAuthApps();
             }
-            // Create app button
-            var createBtn = document.getElementById('createAppBtn');
-            if (createBtn) {
-                createBtn.addEventListener('click', function() {
+            // Add click event on buttons to open specific modal (for create button)
+            (document.querySelectorAll('.js-modal-trigger') || []).forEach(($trigger) => {
+                const modal = $trigger.dataset.target;
+                const $target = document.getElementById(modal);
+                $trigger.addEventListener('click', () => {
+                    // Reset form for new app
                     showOAuthAppModal(false, null);
                 });
+            });
+            // Add click event on modal background, close button, and cancel button
+            (document.querySelectorAll('.modal-background, .modal-close, .modal-card-head .delete, #modalCancelBtn') || []).forEach(($close) => {
+                const $target = $close.closest('.modal');
+                $close.addEventListener('click', () => {
+                    closeModal($target);
+                });
+            });
+            // Add click event to save button
+            const saveBtn = document.getElementById('modalSaveBtn');
+            if (saveBtn) {
+                saveBtn.addEventListener('click', saveOAuthApp);
             }
-            // Close modal when clicking background
-            var modalBg = document.querySelector('#oauthAppModal .modal-background');
-            if (modalBg) {
-                modalBg.addEventListener('click', hideOAuthAppModal);
-            }
+            // Add keyboard event to close all modals
+            document.addEventListener('keydown', (event) => {
+                if(event.key === "Escape") {
+                    closeAllModals();
+                }
+            });
             // Edit/Delete buttons (event delegation)
             document.body.addEventListener('click', function(e) {
                 if (e.target.classList.contains('oauthAppEditBtn') || e.target.closest('.oauthAppEditBtn')) {
                     var btn = e.target.classList.contains('oauthAppEditBtn') ? e.target : e.target.closest('.oauthAppEditBtn');
-                    var card = btn.closest('.box');
-                    var id = card.getAttribute('data-id');
-                    fetch('?oauth_app=1', {
-                        method: 'POST',
-                        body: new URLSearchParams({action: 'list'})
-                    })
-                    .then(r => r.json())
-                    .then(res => {
-                        var app = res.apps.find(a => a.id == id);
-                        if (app) showOAuthAppModal(true, app);
-                    });
+                    var appData = btn.getAttribute('data-app');
+                    if (appData) {
+                        var app = JSON.parse(appData);
+                        showOAuthAppModal(true, app);
+                    }
                 }
                 if (e.target.classList.contains('oauthAppDeleteBtn') || e.target.closest('.oauthAppDeleteBtn')) {
                     if (!confirm('Delete this application?')) return;
                     var btn = e.target.classList.contains('oauthAppDeleteBtn') ? e.target : e.target.closest('.oauthAppDeleteBtn');
-                    var card = btn.closest('.box');
-                    var id = card.getAttribute('data-id');
+                    var id = btn.getAttribute('data-id');
                     var data = new FormData();
                     data.append('action', 'delete');
                     data.append('id', id);
@@ -720,15 +774,35 @@ if ($isWhitelisted) {
             if (document.getElementById('domainsContainer')) {
                 renderDomains();
             }
+            
+            // Create domain button
             var createDomainBtn = document.getElementById('createDomainBtn');
             if (createDomainBtn) {
                 createDomainBtn.addEventListener('click', function() {
                     showDomainModal(false, null);
                 });
             }
-            var domainModalBg = document.querySelector('#domainModal .modal-background');
-            if (domainModalBg) {
-                domainModalBg.addEventListener('click', hideDomainModal);
+            
+            // Domain modal close events
+            const domainModal = document.getElementById('domainModal');
+            if (domainModal) {
+                // Close on background click
+                domainModal.querySelector('.modal-background').addEventListener('click', () => {
+                    closeModal(domainModal);
+                });
+                
+                // Close on delete button click
+                domainModal.querySelector('.delete').addEventListener('click', () => {
+                    closeModal(domainModal);
+                });
+                
+                // Cancel button
+                document.getElementById('domainModalCancelBtn').addEventListener('click', () => {
+                    closeModal(domainModal);
+                });
+                
+                // Save button
+                document.getElementById('domainModalSaveBtn').addEventListener('click', saveDomain);
             }
         });
         </script>
@@ -874,13 +948,29 @@ if ($isWhitelisted) {
                     <div class="modal-card">
                         <header class="modal-card-head">
                             <p class="modal-card-title" id="domainModalTitle">New Domain</p>
-                            <button class="delete" aria-label="close" onclick="hideDomainModal()"></button>
+                            <button class="delete" aria-label="close"></button>
                         </header>
-                        <section class="modal-card-body" id="domainModalBody">
-                            <!-- Form content will be injected here by JS -->
+                        <section class="modal-card-body">
+                            <input type="hidden" id="domainEditMode" value="0">
+                            <input type="hidden" id="domainId" value="">
+                            <div class="field">
+                                <label class="label">Domain</label>
+                                <div class="control">
+                                    <input class="input" type="text" id="modalDomain" placeholder="example.com" maxlength="255">
+                                </div>
+                            </div>
+                            <div class="field">
+                                <label class="label">Notes (optional)</label>
+                                <div class="control">
+                                    <textarea class="textarea" id="modalDomainNotes" maxlength="500"></textarea>
+                                </div>
+                            </div>
                         </section>
-                        <footer class="modal-card-foot" id="domainModalFooter">
-                            <!-- Action buttons will be injected here by JS -->
+                        <footer class="modal-card-foot">
+                            <div class="buttons">
+                                <button class="button is-success" id="domainModalSaveBtn">Add Domain</button>
+                                <button class="button" id="domainModalCancelBtn">Cancel</button>
+                            </div>
                         </footer>
                     </div>
                 </div>
