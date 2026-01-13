@@ -735,8 +735,13 @@ if (isset($_GET['auth_data'])) {
                 const modal = $trigger.dataset.target;
                 const $target = document.getElementById(modal);
                 $trigger.addEventListener('click', () => {
-                    // Reset form for new app
-                    showOAuthAppModal(false, null);
+                    // Only reset form for OAuth app modal
+                    if (modal === 'oauthAppModal') {
+                        showOAuthAppModal(false, null);
+                    } else {
+                        // Just open the modal normally
+                        openModal($target);
+                    }
                 });
             });
             // Add click event on modal background, close button, and cancel button
