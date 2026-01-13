@@ -69,6 +69,36 @@ body {
     color: #a0aec0 !important;
 }
 
+.stats-summary {
+    margin-top: 1rem;
+    padding: 10px;
+    background: #2d3748 !important;
+    border-radius: 4px;
+    font-size: 0.9em;
+    color: #cbd5e0 !important;
+}
+
+.stats-summary strong {
+    color: #e2e8f0 !important;
+}
+
+/* Table styling for dark mode */
+.container-wide table {
+    color: #cbd5e0;
+}
+
+.container-wide table th {
+    color: #ffffff !important;
+}
+
+.container-wide table td {
+    color: #cbd5e0;
+}
+
+.container-wide table td strong {
+    color: #e2e8f0;
+}
+
 .container-wide .info-box label {
     color: #cbd5e0 !important;
 }
@@ -159,7 +189,7 @@ h1 {
 }
 
 .info-box p {
-    color: #4a5568;
+    color: #ffffff;
     line-height: 1.6;
 }
 
@@ -170,7 +200,7 @@ h1 {
 
 .feature-list li {
     padding: 10px 0;
-    color: #4a5568;
+    color: #ffffff;
     display: flex;
     align-items: center;
 }
@@ -273,3 +303,115 @@ h1 {
     align-items: center;
     margin-bottom: 2rem;
 }
+
+/* Utility & component classes to replace inline styles in PHP templates */
+.center-row {
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+    margin-bottom: 2rem;
+}
+.zero-margin { margin: 0 !important; }
+.btn-light { margin-top: 1rem; background: #ffffff; color: #1a202c; display: inline-block; font-weight: bold; }
+.btn-small { padding: 0.5rem 1rem; }
+.bg-primary { background: #667eea !important; }
+.bg-success { background: #10b981 !important; }
+.whitelisted-badge { margin-top: 0.5rem; color: #48bb78; }
+
+.app-card { background: #1a202c; padding: 15px; border-radius: 8px; margin-bottom: 1rem; }
+
+.input-disabled { width: 100%; padding: 10px; border: 1px solid #e2e8f0; border-radius: 4px; background: #1a202c; color: #ffffff; }
+.label-white { display: block; margin-bottom: 5px; color: #ffffff; font-weight: 500; }
+.btn-disabled { padding: 10px 20px; background: #cbd5e0; color: #ffffff; border: none; border-radius: 4px; cursor: not-allowed; font-weight: 500; }
+
+.analytics-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 15px; margin-top: 1rem; }
+.analytics-card { padding: 20px; border-radius: 8px; color: white; text-align: center; }
+.analytics-value { font-size: 2em; font-weight: bold; }
+.analytics-label { font-size: 0.9em; margin-top: 5px; }
+.analytics-gradient-1 { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
+.analytics-gradient-2 { background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); }
+.analytics-gradient-3 { background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%); }
+
+/* Metric cards used on stats page */
+.metric-card { background: #f7fafc; padding: 15px; border-radius: 8px; }
+.border-primary { border-left: 4px solid #667eea; }
+.border-success { border-left: 4px solid #48bb78; }
+.border-danger { border-left: 4px solid #ef4444; }
+.border-warning { border-left: 4px solid #f59e0b; }
+.border-indigo { border-left: 4px solid #8b5cf6; }
+.border-pink { border-left: 4px solid #ec4899; }
+.mt-10 { margin-top: 10px; }
+
+/* Alert styles */
+.alert-preview { background: #fff3cd; border-left: 4px solid #ffc107; }
+.alert-preview h3 { color: #856404; }
+.alert-preview p { color: #856404; }
+
+/* App card specifics */
+.app-card h4 { color: #667eea; margin-bottom: 10px; font-size: 1em; }
+.app-card p { color: #ffffff; font-size: 0.9em; margin: 5px 0; }
+.status-active { color: #48bb78; }
+
+/* Analytics note */
+.analytics-note { margin-top: 1rem; color: #a0aec0; font-size: 0.9em; }
+
+/* Table dark helper */
+.table-dark { width: 100%; border-collapse: collapse; font-size: 0.9em; }
+.table-sm { font-size: 0.85em; }
+.table-dark thead tr { background: #1a202c; border-bottom: 2px solid #e2e8f0; }
+.table-dark th { padding: 12px; text-align: left; color: #ffffff; font-weight: 600; }
+.table-dark td { padding: 12px; color: #ffffff; }
+.table-dark .center { text-align: center; }
+.table-dark .nowrap { white-space: nowrap; }
+.domain-icon { color: #667eea; margin-right: 8px; }
+
+/* Recent activity specific */
+.time-col { padding: 10px; color: #ffffff; white-space: nowrap; }
+.service-col { padding: 10px; color: #ffffff; }
+.domain-col { padding: 10px; color: #ffffff; font-size: 0.9em; }
+.user-col { padding: 10px; color: #ffffff; }
+.status-col { padding: 10px; text-align: center; }
+
+.service-twitch { color: #9147ff; }
+.service-discord { color: #5865F2; }
+
+.status-success { background: #d1fae5; color: #065f46; padding: 4px 8px; border-radius: 4px; font-weight: 600; font-size: 0.85em; }
+.status-failed { background: #fee2e2; color: #991b1b; padding: 4px 8px; border-radius: 4px; font-weight: 600; font-size: 0.85em; }
+
+/* Webhook helpers */
+.input-light { width: 100%; padding: 10px; border: 1px solid #e2e8f0; border-radius: 4px; background: #ffffff; color: #1a202c; }
+.flex-wrap-gap { display: flex; gap: 10px; flex-wrap: wrap; }
+.checkbox-label { display: flex; align-items: center; gap: 5px; color: #ffffff; }
+.info-text-white { margin-bottom: 1rem; color: #ffffff; }
+.rate-high { color: #48bb78; font-weight: 600; }
+.rate-medium { color: #f59e0b; font-weight: 600; }
+.rate-low { color: #ef4444; font-weight: 600; }
+.table-row { border-bottom: 1px solid #e2e8f0; }
+.mb-15 { margin-bottom: 15px; }
+.mb-10 { margin-bottom: 10px; }
+
+.metrics-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-top: 1rem; }
+.metric-label { color: #718096; font-size: 0.9em; }
+.metric-value { font-size: 2em; font-weight: bold; }
+
+/* Light table styles (used on stats page) */
+.table-light { width: 100%; border-collapse: collapse; }
+.table-light thead tr { background: #f7fafc; border-bottom: 2px solid #e2e8f0; }
+.table-light th { padding: 12px; text-align: left; }
+.table-light td { padding: 12px; }
+.table-light .center { text-align: center; }
+
+/* Error table header */
+.table-error thead tr { background: #fee2e2; border-bottom: 2px solid #fecaca; }
+.value-dark { color: #2d3748; }
+.value-green { color: #48bb78; }
+.value-red { color: #ef4444; }
+.value-warning { color: #f59e0b; }
+.value-indigo { color: #8b5cf6; }
+.value-pink { color: #ec4899; }
+.fw-600 { font-weight: 600; }
+.text-danger { color: #991b1b; }
+.mt-1rem { margin-top: 1rem; }
+.error-icon { color: #dc3545; font-size: 3rem; margin-bottom: 1rem; }
+.redirect-note { margin-top: 2rem; font-size: 0.9rem; opacity: 0.7; }
+.mt-2rem { margin-top: 2rem; }

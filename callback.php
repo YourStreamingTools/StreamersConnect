@@ -24,28 +24,36 @@ if (isset($_GET['code']) && isset($_GET['state'])) {
     $customClientId = $_SESSION['custom_client_id'] ?? null;
     $customClientSecret = $_SESSION['custom_client_secret'] ?? null;
     // Route to appropriate service handler
+    $originDomain = $_SESSION['origin_domain'] ?? 'unknown';
+    $requestedScopes = $_SESSION['requested_scopes'] ?? '';
+    
     switch ($service) {
         case 'twitch':
             $tokenData = exchangeTwitchCodeForToken($authCode, $customClientId, $customClientSecret);
             if ($tokenData === false) {
+                logAuthAttempt($service, $originDomain, [], $requestedScopes, false, 'Failed to exchange authorization code for access token');
                 die('Error: Failed to exchange authorization code for access token.');
             }
             $userData = getTwitchUserData($tokenData['access_token'], $customClientId);
             if ($userData === false) {
+                logAuthAttempt($service, $originDomain, [], $requestedScopes, false, 'Failed to retrieve user data from Twitch API');
                 die('Error: Failed to retrieve user data from Twitch.');
             }
             break;
         case 'discord':
             $tokenData = exchangeDiscordCodeForToken($authCode, $customClientId, $customClientSecret);
             if ($tokenData === false) {
+                logAuthAttempt($service, $originDomain, [], $requestedScopes, false, 'Failed to exchange authorization code for access token');
                 die('Error: Failed to exchange authorization code for access token.');
             }
             $userData = getDiscordUserData($tokenData['access_token']);
             if ($userData === false) {
+                logAuthAttempt($service, $originDomain, [], $requestedScopes, false, 'Failed to retrieve user data from Discord API');
                 die('Error: Failed to retrieve user data from Discord.');
             }
             break;
         default:
+            logAuthAttempt('unknown', $originDomain, [], $requestedScopes, false, 'Unknown service in session');
             die('Error: Unknown service in session');
     }
     // Prepare data to send back to the originating service
@@ -66,12 +74,14 @@ if (isset($_GET['code']) && isset($_GET['state'])) {
             'broadcaster_type' => $userData['broadcaster_type']
         ]
     ];
-    // Get the return URL from session
+    // Get the return URL from session (originDomain and requestedScopes already loaded above)
     $returnUrl = $_SESSION['return_url'] ?? null;
-    $originDomain = $_SESSION['origin_domain'] ?? null;
     if (!$returnUrl || !$originDomain) {
+        logAuthAttempt($service ?? 'unknown', $originDomain ?? 'unknown', [], $requestedScopes, false, 'Missing return URL or origin domain in session');
         die('Error: No return URL found in session.');
     }
+    // Log successful authentication
+    logAuthAttempt($service, $originDomain, $returnData['user'], $requestedScopes, true);
     // Store origin domain for display (before clearing session)
     $displayOrigin = $originDomain;
     // Check if this is StreamersConnect's own authentication (dashboard or base URL)
@@ -111,6 +121,12 @@ if (isset($_GET['error'])) {
     $errorDescription = $_GET['error_description'] ?? 'Unknown error';
     $returnUrl = $_SESSION['return_url'] ?? null;
     $displayOrigin = $_SESSION['origin_domain'] ?? null;
+    $service = $_SESSION['auth_service'] ?? 'unknown';
+    $requestedScopes = $_SESSION['requested_scopes'] ?? '';
+    // Log failed authentication
+    if ($displayOrigin) {
+        logAuthAttempt($service, $displayOrigin, [], $requestedScopes, false, $errorDescription);
+    }
     // Set error state for display
     $authError = true;
     $errorMessage = match($error) {
@@ -251,13 +267,13 @@ function getDiscordUserData($accessToken) {
 <body>
     <div class="loader">
         <?php if (isset($authError) && $authError): ?>
-            <div class="error-icon" style="color: #dc3545; font-size: 3rem; margin-bottom: 1rem;">✖</div>
+            <div class="error-icon">✖</div>
             <h2>Authentication Failed</h2>
             <p><?php echo $errorMessage; ?></p>
-            <?php if (isset($redirectUrl) && isset($displayOrigin)): ?>
-                <p style="margin-top: 2rem; font-size: 0.9rem; opacity: 0.7;">Redirecting back to <strong><?php echo htmlspecialchars($displayOrigin); ?></strong> in <span id="countdown">5</span> seconds...</p>
+                <?php if (isset($redirectUrl) && isset($displayOrigin)): ?>
+                <p class="redirect-note">Redirecting back to <strong><?php echo htmlspecialchars($displayOrigin); ?></strong> in <span id="countdown">5</span> seconds...</p>
             <?php else: ?>
-                <p style="margin-top: 2rem;">Please close this window and try again.</p>
+                <p class="mt-2rem">Please close this window and try again.</p>
             <?php endif; ?>
         <?php elseif (isset($redirectUrl)): ?>
             <div class="spinner"></div>

@@ -141,8 +141,8 @@ function buildDiscordAuthUrl($scopes, $customClientId = null) {
             <div class="logo"><i class="fas fa-lock"></i></div>
             <h1>StreamersConnect</h1>
             <p class="subtitle">Partner Portal</p>
-            <div style="display: flex; gap: 10px; justify-content: center; margin-bottom: 2rem;">
-                <a href="?logout=1" class="btn btn-logout" style="margin: 0;">Logout</a>
+            <div class="center-row">
+                <a href="?logout=1" class="btn btn-logout zero-margin">Logout</a>
             </div>
             <div class="info-box">
                 <h3><i class="fas fa-user"></i> Welcome, <?php echo htmlspecialchars($_SESSION['user_display_name']); ?>!</h3>
@@ -150,7 +150,7 @@ function buildDiscordAuthUrl($scopes, $customClientId = null) {
             <div class="info-box dashboard-highlight">
                 <h3><i class="fas fa-rocket"></i> Partner Dashboard - Coming Soon</h3>
                 <p>We're building an exclusive dashboard for authorized partners to manage their integrations, view analytics, and configure OAuth applications.</p>
-                <p style="margin-top: 1rem;"><strong>Upcoming Features:</strong></p>
+                <p class="mt-1rem"><strong>Upcoming Features:</strong></p>
                 <ul class="feature-list">
                     <li><i class="fas fa-key"></i> OAuth Application Management</li>
                     <li><i class="fas fa-chart-bar"></i> Authentication Analytics</li>
@@ -158,14 +158,14 @@ function buildDiscordAuthUrl($scopes, $customClientId = null) {
                     <li><i class="fas fa-bell"></i> Webhook Management</li>
                     <li><i class="fas fa-shield-alt"></i> Security & Compliance Tools</li>
                 </ul>
-                <a href="dashboard.php" class="btn" style="margin-top: 1rem; background: #ffffff; color: #1a202c; display: inline-block; font-weight: bold;">
+                <a href="dashboard.php" class="btn btn-light">
                     <i class="fas fa-eye"></i> Preview Dashboard (Non-Functional)
                 </a>
             </div>
             <div class="info-box">
                 <h3><i class="fas fa-handshake"></i> Become a Partner</h3>
                 <p>Interested in integrating StreamersConnect into your application? Contact our team to discuss partnership opportunities and get early access to the dashboard.</p>
-                <p style="margin-top: 1rem;"><strong>Email:</strong> partners@streamingtools.com</p>
+                <p class="mt-1rem"><strong>Email:</strong> partners@streamingtools.com</p>
             </div>
         </div>
     <?php else: ?>
