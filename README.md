@@ -185,7 +185,6 @@ StreamersConnect/
 ├── callback.php                              # OAuth callback handler
 ├── config.php                                # Configuration (create from config.example.php)
 ├── config.example.php                        # Configuration template
-├── example-integration-botofthespecter.php   # Integration example
 └── README.md                                 # This file
 ```
 
