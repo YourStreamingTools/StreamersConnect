@@ -152,37 +152,6 @@ if (isset($_GET['error'])) {
 }
 
 /**
- * Get OAuth credentials for a specific domain
- * Checks if the domain has a custom OAuth app assigned
- */
-function getOAuthCredentialsForDomain($service, $domain) {
-    require '/var/www/config/database.php';
-    try {
-        $pdo = new PDO(DB_DSN, DB_USER, DB_PASSWORD);
-        $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
-        // Look up domain and its assigned OAuth app
-        $stmt = $pdo->prepare("
-            SELECT oa.client_id, oa.client_secret 
-            FROM user_allowed_domains uad
-            INNER JOIN oauth_applications oa ON uad.oauth_app_id = oa.id
-            WHERE uad.domain = ? AND oa.service = ? AND oa.is_active = 1
-        ");
-        $stmt->execute([$domain, $service]);
-        $result = $stmt->fetch(PDO::FETCH_ASSOC);
-        if ($result) {
-            return [
-                'client_id' => $result['client_id'],
-                'client_secret' => $result['client_secret']
-            ];
-        }
-        return null;
-    } catch (PDOException $e) {
-        error_log("Error fetching OAuth credentials for domain: " . $e->getMessage());
-        return null;
-    }
-}
-
-/**
  * Exchange Twitch authorization code for access token
  */
 function exchangeTwitchCodeForToken($code, $customClientId = null, $customClientSecret = null) {
