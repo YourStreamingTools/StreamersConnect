@@ -217,31 +217,39 @@ if ($isWhitelisted) {
                         </tr>
                     </thead>
                     <tbody>
-                        <?php foreach ($recentAuths as $auth): 
-                            $time = new DateTime($auth['created_at']);
-                            $now = new DateTime();
-                            $diff = $now->getTimestamp() - $time->getTimestamp();
-                            if ($diff < 60) {
-                                $timeAgo = $diff . 's ago';
-                            } elseif ($diff < 3600) {
-                                $timeAgo = floor($diff / 60) . 'm ago';
-                            } elseif ($diff < 86400) {
-                                $timeAgo = floor($diff / 3600) . 'h ago';
+                        <?php
+                        function timeAgo($datetime) {
+                            try {
+                                $dt = new DateTime($datetime, new DateTimeZone('UTC'));
+                                $now = new DateTime('now', new DateTimeZone('UTC'));
+                                $diff = $now->getTimestamp() - $dt->getTimestamp();
+                                if ($diff < 0) $diff = 0;
+                                if ($diff < 60) {
+                                    return $diff . 's ago';
+                                } elseif ($diff < 3600) {
+                                    return floor($diff / 60) . 'm ago';
+                                } elseif ($diff < 86400) {
+                                    return floor($diff / 3600) . 'h ago';
+                                } else {
+                                    return floor($diff / 86400) . 'd ago';
+                                }
+                            } catch (Exception $e) {
+                                return 'Unknown';
+                            }
+                        }
+                        foreach ($recentAuths as $auth):
+                            $serviceLabel = '';
+                            if ($auth['service'] === 'twitch') {
+                                $serviceLabel = '<i class="fab fa-twitch service-twitch"></i> Twitch';
+                            } elseif ($auth['service'] === 'discord') {
+                                $serviceLabel = '<i class="fab fa-discord service-discord"></i> Discord';
                             } else {
-                                $timeAgo = floor($diff / 86400) . 'd ago';
+                                $serviceLabel = '<i class="fas fa-question-circle"></i> ' . htmlspecialchars($auth['service']);
                             }
                         ?>
                         <tr class="table-row">
-                            <td class="time-col"><?php echo $timeAgo; ?></td>
-                            <td class="service-col">
-                                <?php if ($auth['service'] === 'twitch'): ?>
-                                    <i class="fab fa-twitch service-twitch"></i> Twitch
-                                <?php elseif ($auth['service'] === 'discord'): ?>
-                                    <i class="fab fa-discord service-discord"></i> Discord
-                                <?php else: ?>
-                                    <i class="fas fa-question-circle"></i> <?php echo htmlspecialchars($auth['service']); ?>
-                                <?php endif; ?>
-                            </td>
+                            <td class="time-col"><span class="js-timeago" data-iso="<?php echo htmlspecialchars($auth['created_at']); ?>">...</span></td>
+                            <td class="service-col"><?php echo $serviceLabel; ?></td>
                             <td class="domain-col"><?php echo htmlspecialchars($auth['origin_domain']); ?></td>
                             <td class="user-col"><?php echo htmlspecialchars($auth['user_login'] ?? 'Unknown'); ?></td>
                             <td class="status-col">
@@ -302,5 +310,31 @@ if ($isWhitelisted) {
             <p>&copy; <?php echo date('Y'); ?> StreamersConnect - Part of the StreamingTools Ecosystem</p>
         </div>
     </div>
+<script>
+// Display relative time using browser's timezone
+function timeAgoJS(dateString) {
+    const now = new Date();
+    // If dateString is already ISO, this will work. If not, add 'Z' to treat as UTC.
+    let then = new Date(dateString);
+    if (isNaN(then.getTime())) {
+        then = new Date(dateString + 'Z');
+    }
+    const diff = Math.floor((now - then) / 1000);
+    if (isNaN(diff)) return 'Unknown';
+    if (diff < 0) return '0s ago';
+    if (diff < 60) return diff + 's ago';
+    if (diff < 3600) return Math.floor(diff / 60) + 'm ago';
+    if (diff < 86400) return Math.floor(diff / 3600) + 'h ago';
+    return Math.floor(diff / 86400) + 'd ago';
+}
+document.addEventListener('DOMContentLoaded', function() {
+    document.querySelectorAll('.js-timeago').forEach(function(el) {
+        const iso = el.getAttribute('data-iso');
+        if (iso) {
+            el.textContent = timeAgoJS(iso);
+        }
+    });
+});
+</script>
 </body>
 </html>
