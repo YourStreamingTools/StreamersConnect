@@ -378,7 +378,12 @@ if ($isWhitelisted) {
         </div>
         <!-- OAuth Application Management -->
         <div class="info-box">
-            <h3><i class="fas fa-key"></i> OAuth Applications</h3>
+            <h3>
+                <i class="fas fa-key"></i> OAuth Applications
+                <button class="button is-info is-small is-pulled-right js-modal-trigger" data-target="oauthHelpModal">
+                    <i class="fas fa-question-circle"></i> How To Use
+                </button>
+            </h3>
             <p class="info-text-white">Manage your OAuth applications and credentials.</p>
             <?php if ($isWhitelisted): ?>
                 <!-- Bulma Modal for OAuth App -->
@@ -449,6 +454,88 @@ if ($isWhitelisted) {
                 <div id="oauthAppsContainer"></div>
                 <button class="button is-primary is-small mt-10 js-modal-trigger" data-target="oauthAppModal" id="createAppBtn"><i class="fas fa-plus"></i> Create New Application</button>
             <?php endif; ?>
+        </div>
+        <!-- OAuth Help Modal -->
+        <div id="oauthHelpModal" class="modal">
+            <div class="modal-background"></div>
+            <div class="modal-card">
+                <header class="modal-card-head">
+                    <p class="modal-card-title"><i class="fas fa-question-circle"></i> How To Use OAuth Applications</p>
+                    <button class="delete" aria-label="close"></button>
+                </header>
+                <section class="modal-card-body">
+                    <div class="content">
+                        <h4><i class="fas fa-info-circle"></i> Overview</h4>
+                        <p>StreamersConnect allows your websites to authenticate users via Twitch or Discord OAuth. Follow these steps to integrate authentication into your application:</p>
+                        <h4><i class="fas fa-list-ol"></i> Setup Steps</h4>
+                        <ol>
+                            <li>
+                                <strong>Create an OAuth Application:</strong>
+                                <ul>
+                                    <li>Click "Create New Application" button</li>
+                                    <li>Choose service (Twitch or Discord)</li>
+                                    <li>Give it a name (e.g., "My Bot Twitch Auth")</li>
+                                    <li>Enter your Client ID and Client Secret from Twitch/Discord Developer Portal</li>
+                                    <li>Check "Default Application" if you want this used for all your domains by default</li>
+                                    <li>Or select specific domains to use this OAuth app</li>
+                                </ul>
+                            </li>
+                            <li>
+                                <strong>Add Your Domain:</strong>
+                                <ul>
+                                    <li>Go to "Allowed Domains" section below</li>
+                                    <li>Add your website domain (e.g., yourchat.botofthespecter.com)</li>
+                                    <li>Optionally assign a specific OAuth app to this domain</li>
+                                </ul>
+                            </li>
+                            <li>
+                                <strong>Integrate Into Your Website:</strong>
+                                <ul>
+                                    <li>Use this URL format to start authentication:</li>
+                                    <li><code style="font-size: 0.85em; word-break: break-all;">https://streamersconnect.com/?service=twitch&login=YOUR_DOMAIN&scopes=user:read:email&return_url=https://YOUR_DOMAIN/callback</code></li>
+                                    <li>Replace <code>YOUR_DOMAIN</code> with your actual domain</li>
+                                    <li>Replace <code>scopes</code> with the permissions you need</li>
+                                    <li>Replace <code>return_url</code> with where users should return after authentication</li>
+                                </ul>
+                            </li>
+                            <li>
+                                <strong>Handle the Response:</strong>
+                                <ul>
+                                    <li>Users will be redirected back to your <code>return_url</code> with an <code>auth_data</code> parameter</li>
+                                    <li>Decode the base64 auth_data to get user information and access tokens</li>
+                                    <li>The data includes: user ID, username, display name, email, access token, refresh token</li>
+                                </ul>
+                            </li>
+                        </ol>
+                        <h4><i class="fas fa-code"></i> Example Integration</h4>
+                        <pre style="background: #2d2d2d; padding: 15px; border-radius: 5px; color: #f8f8f2; overflow-x: auto; font-size: 0.85em;"><code>&lt;!-- Login Button --&gt;
+&lt;a href="https://streamersconnect.com/?service=twitch&login=yourchat.botofthespecter.com&scopes=user:read:email&return_url=https://yourchat.botofthespecter.com/auth" class="btn"&gt;
+    Login with Twitch
+&lt;/a&gt;
+
+&lt;!-- PHP: Handle callback --&gt;
+if (isset($_GET['auth_data'])) {
+    $authData = json_decode(base64_decode($_GET['auth_data']), true);
+    $userId = $authData['user']['id'];
+    $username = $authData['user']['login'];
+    $accessToken = $authData['access_token'];
+    // Store in session or database
+}</code></pre>
+                        <h4><i class="fas fa-shield-alt"></i> Security Notes</h4>
+                        <ul>
+                            <li><strong>Domain Whitelist:</strong> Only domains you add to "Allowed Domains" can use your OAuth credentials</li>
+                            <li><strong>Return URL Validation:</strong> The return URL must match the domain that initiated the request</li>
+                            <li><strong>Client Secrets:</strong> Your Client Secret is stored securely and never exposed to the frontend</li>
+                            <li><strong>Default vs Specific:</strong> Use "Default" for all domains, or assign specific OAuth apps per domain for isolation</li>
+                        </ul>
+                        <h4><i class="fas fa-question"></i> Need Help?</h4>
+                        <p>If you need assistance, contact: <strong>partners@streamingtools.com</strong></p>
+                    </div>
+                </section>
+                <footer class="modal-card-foot">
+                    <button class="button">Close</button>
+                </footer>
+            </div>
         </div>
         <script>
         // --- OAUTH APP MANAGEMENT ---
