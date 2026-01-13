@@ -214,15 +214,92 @@ Common scopes you might need:
 - Make sure the redirect URI in Twitch console matches exactly
 - Check that cURL is enabled in PHP
 
-## 📈 Future Enhancements
+## 📈 Dashboard & Monitoring
 
-- [ ] Add support for token refresh
-- [ ] Implement JWT for secure data transfer
-- [ ] Add database logging for audit trail
-- [ ] Support for other OAuth providers (YouTube, Discord, etc.)
-- [ ] Admin dashboard for monitoring
-- [ ] Rate limiting per domain
-- [ ] Webhook support for token expiration notifications
+StreamersConnect includes a powerful dashboard for monitoring authentication activity across all connected domains.
+
+### Dashboard Access
+
+The dashboard is available at `https://streamersconnect.com/dashboard.php` after logging in with your Twitch account.
+
+**Access Levels:**
+
+- **Whitelisted Users**: Full access to real authentication data and analytics
+- **Regular Users**: Preview mode with placeholder data
+
+### Features for Whitelisted Users
+
+#### Real-time Analytics
+
+- **Total Authentications**: Overall count of all authentication attempts
+- **Monthly Stats**: Number of authentications in the current month
+- **Success Rate**: Percentage of successful authentications
+
+#### Domain-Specific Statistics
+
+View authentication breakdown by domain
+
+For each domain see:
+
+- Total authentication count
+- Success rate
+- Last authentication timestamp
+
+#### Recent Activity Log
+
+Monitor the last 20 authentication attempts with:
+
+- Timestamp (relative time: "5m ago", "2h ago")
+- Service (Twitch/Discord)
+- Origin domain
+- Username
+- Success/failure status with error details
+
+### Database Structure
+
+StreamersConnect uses a MySQL database to track all authentication activity.
+
+**Tables:**
+
+- `auth_logs` - Every authentication attempt (success/failure)
+- `dashboard_whitelist` - Users with full dashboard access
+- `oauth_applications` - (Future) Partner OAuth applications
+
+### Accessing Statistics
+
+Whitelisted users can view detailed statistics at:
+
+- **Dashboard**: `https://streamersconnect.com/dashboard.php` - Overview with recent activity
+- **Detailed Stats**: `https://streamersconnect.com/stats.php` - Comprehensive analytics
+
+The stats page shows:
+
+- Overall authentication statistics
+- Stats broken down by domain
+- Stats broken down by service (Twitch/Discord)
+- Recent failed authentications with error details
+- Unique user counts
+
+### Managing Whitelist
+
+To add users to the whitelist, insert directly into the database:
+
+```sql
+INSERT INTO streamersconnect.dashboard_whitelist (user_login, notes, added_by) 
+VALUES ('username', 'Reason for access', 'admin_name');
+```
+
+Check current whitelist:
+
+```sql
+SELECT user_login, notes, created_at FROM streamersconnect.dashboard_whitelist;
+```
+
+Remove from whitelist:
+
+```sql
+DELETE FROM streamersconnect.dashboard_whitelist WHERE user_login = 'username';
+```
 
 ## 📄 License
 
