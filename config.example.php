@@ -74,14 +74,59 @@ function getDefaultOAuthCredentials($service, $twitchId = null) {
         }
         $stmt->close();
     }
-    
     return false;
 }
 
 /**
+ * Get OAuth credentials for a specific domain
+ * Checks if the domain has a custom OAuth app assigned, otherwise gets owner's default
+ */
+function getOAuthCredentialsForDomain($service, $domain) {
+    $conn = getStreamersConnectDB();
+    if (!$conn) return null;
+    // First try: Look up domain and its assigned OAuth app
+    $stmt = $conn->prepare("
+        SELECT oa.client_id, oa.client_secret 
+        FROM user_allowed_domains uad
+        INNER JOIN oauth_applications oa ON uad.oauth_app_id = oa.id
+        WHERE uad.domain = ? AND oa.service = ?
+    ");
+    $stmt->bind_param('ss', $domain, $service);
+    $stmt->execute();
+    $result = $stmt->get_result();
+    if ($row = $result->fetch_assoc()) {
+        $stmt->close();
+        return [
+            'client_id' => $row['client_id'],
+            'client_secret' => $row['client_secret']
+        ];
+    }
+    $stmt->close();
+    // Second try: Get domain owner's default OAuth app
+    $stmt = $conn->prepare("
+        SELECT oa.client_id, oa.client_secret
+        FROM user_allowed_domains uad
+        INNER JOIN dashboard_whitelist dw ON uad.twitch_id = dw.twitch_id
+        INNER JOIN oauth_applications oa ON dw.user_login = oa.user_login
+        WHERE uad.domain = ? AND oa.service = ? AND oa.is_default = 1
+        LIMIT 1
+    ");
+    $stmt->bind_param('ss', $domain, $service);
+    $stmt->execute();
+    $result = $stmt->get_result();
+    if ($row = $result->fetch_assoc()) {
+        $stmt->close();
+        return [
+            'client_id' => $row['client_id'],
+            'client_secret' => $row['client_secret']
+        ];
+    }
+    $stmt->close();
+    return null;
+}
+
+/**
  * Check if a domain is allowed for authentication
- * Domains are now managed through the dashboard by whitelisted users
- * See database table: user_allowed_domains
  */
 function isAllowedDomain($domain) {
     $conn = getStreamersConnectDB();
@@ -115,11 +160,13 @@ function getUserDomains($twitchId) {
 
 /**
  * Check if user is whitelisted for dashboard access
- * Users are now managed by their Twitch ID (not username)
  */
 function isWhitelistedUser($twitchId) {
     $conn = getStreamersConnectDB();
-    if (!$conn) return false;
+    if (!$conn) {
+        error_log("isWhitelistedUser: Database connection failed");
+        return false;
+    }
     $stmt = $conn->prepare("SELECT id FROM dashboard_whitelist WHERE twitch_id = ?");
     $stmt->bind_param("s", $twitchId);
     $stmt->execute();
