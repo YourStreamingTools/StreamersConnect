@@ -539,18 +539,27 @@ if ($isWhitelisted) {
                         <h4><i class="fas fa-list-ol"></i> Setup Steps</h4>
                         <ol>
                             <li>
-                                <strong>1. Create an OAuth Application:</strong>
+                                <strong>1. Configure OAuth Application in Twitch/Discord Developer Portal:</strong>
                                 <ul>
-                                    <li>Click "Create New Application" button</li>
+                                    <li><strong style="color: #ff6b6b;">IMPORTANT:</strong> Go to <a href="https://dev.twitch.tv/console/apps" target="_blank">Twitch Developer Console</a> or <a href="https://discord.com/developers/applications" target="_blank">Discord Developer Portal</a></li>
+                                    <li><strong style="color: #ff6b6b;">Set the OAuth Redirect URL to:</strong> <code style="background: #2a2a2a; padding: 2px 6px; border-radius: 3px;">https://streamersconnect.com/callback.php</code></li>
+                                    <li>This redirect URL is <strong>required</strong> for authentication to work properly</li>
+                                    <li>Copy your Client ID and Client Secret</li>
+                                </ul>
+                            </li>
+                            <li>
+                                <strong>2. Add OAuth Application to StreamersConnect:</strong>
+                                <ul>
+                                    <li>Click "Create New Application" button above</li>
                                     <li>Choose service (Twitch or Discord)</li>
                                     <li>Give it a name (e.g., "My Bot Twitch Auth")</li>
-                                    <li>Enter your Client ID and Client Secret from Twitch/Discord Developer Portal</li>
+                                    <li>Enter your Client ID and Client Secret from the developer portal</li>
                                     <li>Check "Default Application" if you want this used for all your domains by default</li>
                                     <li>Or select specific domains to use this OAuth app</li>
                                 </ul>
                             </li>
                             <li>
-                                <strong>2. Add Your Domain:</strong>
+                                <strong>3. Add Your Domain:</strong>
                                 <ul>
                                     <li>Go to "Allowed Domains" section below</li>
                                     <li>Add your website domain (e.g., example.com)</li>
@@ -558,7 +567,7 @@ if ($isWhitelisted) {
                                 </ul>
                             </li>
                             <li>
-                                <strong>3. Integrate Into Your Website:</strong>
+                                <strong>4. Integrate Into Your Website:</strong>
                                 <ul>
                                     <li>Use this URL format to start authentication:</li>
                                     <li class="url-code">https://streamersconnect.com/?service=twitch&login=YOUR_DOMAIN&scopes=user:read:email&return_url=https://YOUR_DOMAIN/callback</li>
@@ -568,7 +577,7 @@ if ($isWhitelisted) {
                                 </ul>
                             </li>
                             <li>
-                                <strong>4. Handle the Response:</strong>
+                                <strong>5. Handle the Response:</strong>
                                 <ul>
                                     <li>Users will be redirected back to your <code>return_url</code> with an <code>auth_data</code> parameter</li>
                                     <li>Decode the base64 auth_data to get user information and access tokens</li>
