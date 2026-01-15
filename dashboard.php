@@ -611,7 +611,7 @@ if (isset($_GET['auth_data'])) {
                     </div>
                 </section>
                 <footer class="modal-card-foot">
-                    <button class="button">Close</button>
+                    <button class="button" onclick="closeModal(document.getElementById('oauthHelpModal'))">Close</button>
                 </footer>
             </div>
         </div>
