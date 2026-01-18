@@ -93,7 +93,26 @@ $stmt->execute();
 $uniqueUsersPerDomain = $stmt->get_result();
 $stmt->close();
 
-// Recent successful authentications (last 20)
+// Recent successful authentications - pagination setup
+$recentAuthsPerPage = 10;
+$recentAuthsPage = isset($_GET['recent_page']) ? max(1, intval($_GET['recent_page'])) : 1;
+$recentAuthsOffset = ($recentAuthsPage - 1) * $recentAuthsPerPage;
+
+// Get total count for pagination
+$stmt = $conn->prepare("
+    SELECT COUNT(*) as total
+    FROM auth_logs al
+    INNER JOIN user_allowed_domains uad ON al.origin_domain = uad.domain
+    WHERE uad.twitch_id = ? AND al.success = 1
+");
+$stmt->bind_param('s', $twitchId);
+$stmt->execute();
+$recentAuthsTotalResult = $stmt->get_result();
+$recentAuthsTotal = $recentAuthsTotalResult->fetch_assoc()['total'];
+$recentAuthsTotalPages = ceil($recentAuthsTotal / $recentAuthsPerPage);
+$stmt->close();
+
+// Get paginated results
 $stmt = $conn->prepare("
     SELECT 
         al.service,
@@ -106,9 +125,9 @@ $stmt = $conn->prepare("
     INNER JOIN user_allowed_domains uad ON al.origin_domain = uad.domain
     WHERE uad.twitch_id = ? AND al.success = 1
     ORDER BY al.created_at DESC
-    LIMIT 20
+    LIMIT ? OFFSET ?
 ");
-$stmt->bind_param('s', $twitchId);
+$stmt->bind_param('sii', $twitchId, $recentAuthsPerPage, $recentAuthsOffset);
 $stmt->execute();
 $recentSuccessfulAuths = $stmt->get_result();
 $stmt->close();
@@ -415,6 +434,61 @@ $stmt->close();
                         </tbody>
                     </table>
                 </div>
+                <?php if ($recentAuthsTotalPages > 1): ?>
+                    <div class="pagination-container" style="margin-top: 1rem; text-align: center;">
+                        <p class="info-text-white" style="margin-bottom: 0.5rem;">
+                            Showing page
+                            <?php echo $recentAuthsPage; ?> of
+                            <?php echo $recentAuthsTotalPages; ?>
+                            (
+                            <?php echo number_format($recentAuthsTotal); ?> total authentications)
+                        </p>
+                        <div class="pagination-buttons">
+                            <?php if ($recentAuthsPage > 1): ?>
+                                <a href="?recent_page=<?php echo $recentAuthsPage - 1; ?>" class="btn btn-small bg-primary"
+                                    style="margin: 0 5px;">
+                                    <i class="fas fa-chevron-left"></i> Previous
+                                </a>
+                            <?php endif; ?>
+                            <?php
+                            // Show page numbers
+                            $startPage = max(1, $recentAuthsPage - 2);
+                            $endPage = min($recentAuthsTotalPages, $recentAuthsPage + 2);
+                            if ($startPage > 1): ?>
+                                <a href="?recent_page=1" class="btn btn-small bg-primary" style="margin: 0 5px;">1</a>
+                                <?php if ($startPage > 2): ?>
+                                    <span style="color: #cbd5e0; margin: 0 5px;">...</span>
+                                <?php endif; ?>
+                            <?php endif; ?>
+                            <?php for ($i = $startPage; $i <= $endPage; $i++): ?>
+                                <?php if ($i == $recentAuthsPage): ?>
+                                    <span class="btn btn-small bg-success" style="margin: 0 5px; cursor: default;">
+                                        <?php echo $i; ?>
+                                    </span>
+                                <?php else: ?>
+                                    <a href="?recent_page=<?php echo $i; ?>" class="btn btn-small bg-primary" style="margin: 0 5px;">
+                                        <?php echo $i; ?>
+                                    </a>
+                                <?php endif; ?>
+                            <?php endfor; ?>
+                            <?php if ($endPage < $recentAuthsTotalPages): ?>
+                                <?php if ($endPage < $recentAuthsTotalPages - 1): ?>
+                                    <span style="color: #cbd5e0; margin: 0 5px;">...</span>
+                                <?php endif; ?>
+                                <a href="?recent_page=<?php echo $recentAuthsTotalPages; ?>" class="btn btn-small bg-primary"
+                                    style="margin: 0 5px;">
+                                    <?php echo $recentAuthsTotalPages; ?>
+                                </a>
+                            <?php endif; ?>
+                            <?php if ($recentAuthsPage < $recentAuthsTotalPages): ?>
+                                <a href="?recent_page=<?php echo $recentAuthsPage + 1; ?>" class="btn btn-small bg-primary"
+                                    style="margin: 0 5px;">
+                                    Next <i class="fas fa-chevron-right"></i>
+                                </a>
+                            <?php endif; ?>
+                        </div>
+                    </div>
+                <?php endif; ?>
             </div>
         <?php endif; ?>
         <!-- Most Active Users -->
