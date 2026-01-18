@@ -78,6 +78,7 @@ $uniqueUsers = $uniqueUsersResult->fetch_assoc();
 ?>
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -87,13 +88,15 @@ $uniqueUsers = $uniqueUsersResult->fetch_assoc();
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.css">
     <link rel="stylesheet" href="custom.css?v=<?php echo filemtime(__DIR__ . '/custom.css'); ?>">
 </head>
+
 <body>
     <div class="container container-wide">
         <div class="logo"><i class="fas fa-chart-line"></i></div>
         <h1>StreamersConnect Statistics</h1>
         <p class="subtitle">Detailed Authentication Analytics</p>
         <div class="center-row">
-            <a href="/dashboard.php" class="btn btn-small bg-primary zero-margin"><i class="fas fa-arrow-left"></i> Dashboard</a>
+            <a href="/dashboard.php" class="btn btn-small bg-primary zero-margin"><i class="fas fa-arrow-left"></i>
+                Dashboard</a>
             <a href="?logout=1" class="btn btn-logout zero-margin">Logout</a>
         </div>
         <!-- Overall Statistics -->
@@ -126,11 +129,11 @@ $uniqueUsers = $uniqueUsersResult->fetch_assoc();
                 </div>
             </div>
             <?php if ($stats['first_auth']): ?>
-            <div class="stats-summary">
-                <strong>First Auth:</strong> <?php echo date('M j, Y g:i A', strtotime($stats['first_auth'])); ?> | 
-                <strong>Last Auth:</strong> <?php echo date('M j, Y g:i A', strtotime($stats['last_auth'])); ?> | 
-                <strong>Unique Users:</strong> <?php echo number_format($uniqueUsers['unique_users']); ?>
-            </div>
+                <div class="stats-summary">
+                    <strong>First Auth:</strong> <?php echo date('M j, Y g:i A', strtotime($stats['first_auth'])); ?> |
+                    <strong>Last Auth:</strong> <?php echo date('M j, Y g:i A', strtotime($stats['last_auth'])); ?> |
+                    <strong>Unique Users:</strong> <?php echo number_format($uniqueUsers['unique_users']); ?>
+                </div>
             <?php endif; ?>
         </div>
         <!-- By Domain -->
@@ -148,17 +151,23 @@ $uniqueUsers = $uniqueUsersResult->fetch_assoc();
                         </tr>
                     </thead>
                     <tbody>
-                        <?php while ($row = $domainStatsResult->fetch_assoc()): 
+                        <?php while ($row = $domainStatsResult->fetch_assoc()):
                             $rate = $row['auth_count'] > 0 ? round(($row['successful'] / $row['auth_count']) * 100, 1) : 0;
-                            if ($rate >= 95) { $rateClass = 'rate-high'; } elseif ($rate >= 80) { $rateClass = 'rate-medium'; } else { $rateClass = 'rate-low'; }
-                        ?>
-                        <tr class="table-row">
-                            <td><strong><?php echo htmlspecialchars($row['origin_domain']); ?></strong></td>
-                            <td class="center"><?php echo number_format($row['auth_count']); ?></td>
-                            <td class="center value-green"><?php echo number_format($row['successful']); ?></td>
-                            <td class="center"><span class="<?php echo $rateClass; ?>"><?php echo $rate; ?>%</span></td>
-                            <td><?php echo date('M j, Y g:i A', strtotime($row['last_auth'])); ?></td>
-                        </tr>
+                            if ($rate >= 95) {
+                                $rateClass = 'rate-high';
+                            } elseif ($rate >= 80) {
+                                $rateClass = 'rate-medium';
+                            } else {
+                                $rateClass = 'rate-low';
+                            }
+                            ?>
+                            <tr class="table-row">
+                                <td><strong><?php echo htmlspecialchars($row['origin_domain']); ?></strong></td>
+                                <td class="center"><?php echo number_format($row['auth_count']); ?></td>
+                                <td class="center value-green"><?php echo number_format($row['successful']); ?></td>
+                                <td class="center"><span class="<?php echo $rateClass; ?>"><?php echo $rate; ?>%</span></td>
+                                <td><?php echo date('M j, Y g:i A', strtotime($row['last_auth'])); ?></td>
+                            </tr>
                         <?php endwhile; ?>
                     </tbody>
                 </table>
@@ -178,16 +187,16 @@ $uniqueUsers = $uniqueUsersResult->fetch_assoc();
                         </tr>
                     </thead>
                     <tbody>
-                        <?php while ($row = $serviceStatsResult->fetch_assoc()): 
+                        <?php while ($row = $serviceStatsResult->fetch_assoc()):
                             $rate = $row['auth_count'] > 0 ? round(($row['successful'] / $row['auth_count']) * 100, 1) : 0;
                             $icon = $row['service'] === 'twitch' ? '<i class="fab fa-twitch service-twitch"></i>' : '<i class="fab fa-discord service-discord"></i>';
-                        ?>
-                        <tr class="table-row">
-                            <td><?php echo $icon; ?> <strong><?php echo ucfirst($row['service']); ?></strong></td>
-                            <td class="center"><?php echo number_format($row['auth_count']); ?></td>
-                            <td class="center value-green"><?php echo number_format($row['successful']); ?></td>
-                            <td class="center fw-600"><?php echo $rate; ?>%</td>
-                        </tr>
+                            ?>
+                            <tr class="table-row">
+                                <td><?php echo $icon; ?> <strong><?php echo ucfirst($row['service']); ?></strong></td>
+                                <td class="center"><?php echo number_format($row['auth_count']); ?></td>
+                                <td class="center value-green"><?php echo number_format($row['successful']); ?></td>
+                                <td class="center fw-600"><?php echo $rate; ?>%</td>
+                            </tr>
                         <?php endwhile; ?>
                     </tbody>
                 </table>
@@ -195,37 +204,39 @@ $uniqueUsers = $uniqueUsersResult->fetch_assoc();
         </div>
         <!-- Recent Failures -->
         <?php if ($failuresResult->num_rows > 0): ?>
-        <div class="info-box">
-            <h3><i class="fas fa-exclamation-triangle"></i> Recent Failed Authentications</h3>
-            <div class="table-responsive">
-                <table class="table-error table-sm">
-                    <thead>
-                        <tr>
-                            <th>Time</th>
-                            <th>Service</th>
-                            <th>Domain</th>
-                            <th>User</th>
-                            <th>Error</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <?php while ($row = $failuresResult->fetch_assoc()): ?>
-                        <tr class="table-row">
-                            <td><?php echo date('M j, g:i A', strtotime($row['created_at'])); ?></td>
-                            <td><?php echo ucfirst($row['service']); ?></td>
-                            <td><?php echo htmlspecialchars($row['origin_domain']); ?></td>
-                            <td><?php echo htmlspecialchars($row['user_login'] ?? 'Unknown'); ?></td>
-                            <td class="text-danger"><?php echo htmlspecialchars($row['error_message'] ?? 'Unknown'); ?></td>
-                        </tr>
-                        <?php endwhile; ?>
-                    </tbody>
-                </table>
+            <div class="info-box">
+                <h3><i class="fas fa-exclamation-triangle"></i> Recent Failed Authentications</h3>
+                <div class="table-responsive">
+                    <table class="table-error table-sm">
+                        <thead>
+                            <tr>
+                                <th>Time</th>
+                                <th>Service</th>
+                                <th>Domain</th>
+                                <th>User</th>
+                                <th>Error</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <?php while ($row = $failuresResult->fetch_assoc()): ?>
+                                <tr class="table-row">
+                                    <td><?php echo date('M j, g:i A', strtotime($row['created_at'])); ?></td>
+                                    <td><?php echo ucfirst($row['service']); ?></td>
+                                    <td><?php echo htmlspecialchars($row['origin_domain']); ?></td>
+                                    <td><?php echo htmlspecialchars($row['user_login'] ?? 'Unknown'); ?></td>
+                                    <td class="text-danger"><?php echo htmlspecialchars($row['error_message'] ?? 'Unknown'); ?>
+                                    </td>
+                                </tr>
+                            <?php endwhile; ?>
+                        </tbody>
+                    </table>
+                </div>
             </div>
-        </div>
         <?php endif; ?>
         <div class="footer">
             <p>&copy; <?php echo date('Y'); ?> StreamersConnect - Part of the StreamingTools Ecosystem</p>
         </div>
     </div>
 </body>
+
 </html>
