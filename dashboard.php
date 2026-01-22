@@ -624,6 +624,26 @@ if (isset($_GET['auth_data'])) {
     $accessToken = $authData['access_token'];
     // Store in session or database
 }</code></pre>
+                        <h4><i class="fas fa-database"></i> Example auth_data Response</h4>
+                        <p>When decoded, the <code>auth_data</code> will contain the following structure:</p>
+                        <pre><code>{
+    "success": true,
+    "service": "twitch",
+    "access_token": "abc123xyz...",
+    "refresh_token": "def456uvw...",
+    "expires_in": 3600,
+    "scope": "user:read:email",
+    "token_type": "bearer",
+    "user": {
+        "id": "123456789",
+        "login": "username",
+        "display_name": "DisplayName",
+        "email": "user@example.com",
+        "profile_image_url": "https://static-cdn.jtvnw.net/...",
+        "broadcaster_type": "partner"
+    }
+}</code></pre>
+                        <p class="help"><strong>Note:</strong> For Discord, the user object will have <code>username</code> instead of <code>login</code>, and <code>global_name</code> for display name. The <code>broadcaster_type</code> field is Twitch-specific.</p>
                         <h4><i class="fas fa-shield-alt"></i> Security Notes</h4>
                         <ul>
                             <li><strong>Domain Whitelist:</strong> Only domains you add to "Allowed Domains" can use
