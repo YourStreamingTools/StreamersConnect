@@ -466,7 +466,7 @@ The stats page shows:
 
 ## 📄 License
 
-Proprietary - For use with StreamingTools ecosystem services and authorized partners only
+The StreamersConnect service and its intellectual property are proprietary to the StreamingTools team. This repository is publicly visible on GitHub for transparency and collaboration, but the code is not published under an open-source license and does not grant rights to redistribute or use the software in production without explicit permission. To request reuse, contributions, or a commercial license, please contact the StreamingTools development team.
 
 ## 👤 Author
 
