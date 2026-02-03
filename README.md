@@ -246,12 +246,20 @@ The authentication payload has the following structure:
 
 ```text
 StreamersConnect/
-├── index.php                                 # Main entry point
-├── callback.php                              # OAuth callback handler
-├── config.php                                # Configuration (create from config.example.php)
-├── config.example.php                        # Configuration template
-└── README.md                                 # This file
+├── index.php                 # Main entry point
+├── dashboard.php             # Admin dashboard
+├── callback.php              # OAuth callback handler
+├── token_exchange.php        # Server-side token exchange endpoint
+├── verify_auth_sig.php       # Signed payload verification endpoint
+├── api_clients.php           # API key management endpoints (admin)
+├── signing_keys.php          # Signing key management (admin)
+├── scripts/
+│   └── cleanup_tokens.php    # Cron job for cleaning expired tokens
+├── config.example.php        # Configuration template
+└── README.md                 # This file
 ```
+
+Note: Admin endpoints and management pages require a whitelisted dashboard account or admin privileges.
 
 ## 📝 Architecture
 
@@ -266,16 +274,44 @@ Your services are responsible for storing tokens and managing user sessions.
 ## 🔄 Workflow
 
 1. **User** clicks login on `yourdomain.com`
-2. **yourdomain.com** redirects to StreamersConnect with domain and scopes
-3. **StreamersConnect** selects appropriate OAuth app (your default or domain-specific)
-4. **StreamersConnect** redirects user to Twitch/Discord OAuth
-5. **User** authorizes the application
-6. **Twitch/Discord** redirects back to StreamersConnect callback
-7. **StreamersConnect** exchanges code for access token
-8. **StreamersConnect** fetches user data
-9. **StreamersConnect** triggers webhooks (if configured)
-10. **StreamersConnect** redirects back to yourdomain.com with auth data
-11. **yourdomain.com** stores the tokens and user data
+2. **yourdomain.com** redirects to StreamersConnect with domain, scopes and `return_url`
+3. **StreamersConnect** selects the OAuth app and redirects the user to Twitch/Discord for authorization
+4. **User** authorizes the application
+5. Twitch/Discord redirects back to StreamersConnect's callback
+6. **StreamersConnect** exchanges the authorization code for an access token and fetches user data
+7. **StreamersConnect** issues a response and redirects the user back to your `return_url` with one or both of:
+   - `auth_data_sig` (signed payload, preferred)
+   - `server_token` (short-lived single-use token)
+8. Your service should verify the response server-side:
+   - Call `verify_auth_sig.php` with `auth_data_sig` and your API key (preferred), or
+   - Exchange `server_token` via `token_exchange.php` with your API key
+9. On successful verification/exchange, **yourdomain.com** stores tokens, creates a user session, and proceeds
+10. **StreamersConnect** may trigger webhooks (if configured) to notify downstream services about authentication events
+11. If verification fails, treat the flow as an authentication failure and handle accordingly (log, alert, retry, or show an error).
+
+---
+
+### On verification failure — recommended steps
+
+- Log the failure with request id, timestamp, origin, and HTTP status for diagnostics.
+- Return an appropriate HTTP response to the user/service:
+  - 401 Unauthorized — missing or invalid credentials
+  - 403 Forbidden — revoked or inactive API key
+  - 400 Bad Request — malformed payload
+- Show a clear, user-friendly message (e.g., "Authentication failed — please sign in again") and offer a retry path.
+- Emit a metric (counter) and alert if failures spike to detect systemic issues quickly.
+
+---
+
+### Quick flow diagram (ASCII)
+
+```text
+User -> yourdomain.com (start auth) -> StreamersConnect -> Twitch (user authorizes)
+  Twitch -> StreamersConnect (code) -> StreamersConnect exchanges code and fetches user
+  StreamersConnect -> yourdomain.com with auth_data_sig and/or server_token
+  yourdomain.com -> (server-side) verify_auth_sig.php or token_exchange.php -> success -> create session
+                                                            \-> failure -> log + show user error
+```
 
 ## 📝 Available Twitch Scopes
 
