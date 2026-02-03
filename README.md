@@ -247,7 +247,7 @@ The authentication payload has the following structure:
 ```text
 StreamersConnect/
 ├── index.php                 # Main entry point
-├── dashboard.php             # Admin dashboard
+├── dashboard.php             # Partner Dashboard
 ├── callback.php              # OAuth callback handler
 ├── token_exchange.php        # Server-side token exchange endpoint
 ├── verify_auth_sig.php       # Signed payload verification endpoint
