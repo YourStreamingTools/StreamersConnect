@@ -406,6 +406,7 @@ if ($isWhitelisted) {
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bulma@1.0.4/css/bulma.min.css">
     <!-- Custom CSS -->
     <link rel="stylesheet" href="custom.css?v=<?php echo filemtime(__DIR__ . '/custom.css'); ?>">
+
     <!-- Toastify CSS -->
     <link rel="stylesheet" type="text/css" href="https://cdn.jsdelivr.net/npm/toastify-js/src/toastify.min.css">
 </head>
@@ -467,6 +468,7 @@ if ($isWhitelisted) {
                             <button class="delete" aria-label="close"></button>
                         </header>
                         <section class="modal-card-body">
+                            <form id="oauthAppForm">
                             <input type="hidden" id="modalEditMode" value="0">
                             <input type="hidden" id="modalAppId" value="">
                             <div class="field">
@@ -490,14 +492,14 @@ if ($isWhitelisted) {
                             <div class="field">
                                 <label class="label">Client ID</label>
                                 <div class="control">
-                                    <input class="input" type="text" id="modalClientId" maxlength="128"
+                                    <input class="input" type="text" id="modalClientId" maxlength="128" autocomplete="username"
                                         placeholder="your_client_id">
                                 </div>
                             </div>
                             <div class="field">
                                 <label class="label">Client Secret</label>
                                 <div class="control">
-                                    <input class="input" type="password" id="modalClientSecret" maxlength="128"
+                                    <input class="input" type="password" id="modalClientSecret" maxlength="128" autocomplete="current-password"
                                         placeholder="your_client_secret">
                                 </div>
                             </div>
@@ -521,6 +523,7 @@ if ($isWhitelisted) {
                                 <p class="help">Select which domains should use this OAuth application. Unselected domains
                                     will use the default OAuth application.</p>
                             </div>
+                            </form>
                         </section>
                         <footer class="modal-card-foot">
                             <div class="buttons">
@@ -604,7 +607,7 @@ if ($isWhitelisted) {
                                     <li>Users will be redirected back to your <code>return_url</code> with an
                                         <code>auth_data</code> parameter
                                     </li>
-                                    <li>Decode the base64 auth_data to get user information and access tokens</li>
+                                    <li>If present, prefer verifying <code>auth_data_sig</code> and using that payload; otherwise decode the base64 <code>auth_data</code> to get user information and access tokens</li>
                                     <li>The data includes: user ID, username, display name, email, access token, refresh
                                         token</li>
                                 </ul>
@@ -618,12 +621,24 @@ if ($isWhitelisted) {
 
 &lt;!-- PHP: Handle callback --&gt;
 if (isset($_GET['auth_data'])) {
-    $authData = json_decode(base64_decode($_GET['auth_data']), true);
+    $authData = null;
+    // Prefer signed payload if provided
+    if (isset($_GET['auth_data_sig']) && function_exists('verify_signed_auth_data')) {
+        $authData = verify_signed_auth_data($_GET['auth_data_sig']);
+    }
+    if (!$authData) {
+        $authData = json_decode(base64_decode($_GET['auth_data']), true);
+    }
     $userId = $authData['user']['id'];
     $username = $authData['user']['login'];
     $accessToken = $authData['access_token'];
     // Store in session or database
-}</code></pre>
+}
+
+// Example: If you received a server_token, you may exchange it server-side:
+// POST /token_exchange.php with JSON { "server_token": "..." }
+// Response: { "success": true, "payload": { ... } }
+</code></pre>
                         <h4><i class="fas fa-database"></i> Example auth_data Response</h4>
                         <p>When decoded, the <code>auth_data</code> will contain the following structure:</p>
                         <pre><code>{
@@ -647,13 +662,27 @@ if (isset($_GET['auth_data'])) {
                         <h4><i class="fas fa-shield-alt"></i> Security Notes</h4>
                         <ul>
                             <li><strong>Domain Whitelist:</strong> Only domains you add to "Allowed Domains" can use
-                                your OAuth credentials</li>
-                            <li><strong>Return URL Validation:</strong> The return URL must match the domain that
-                                initiated the request</li>
+                                your OAuth credentials.</li>
+                            <li><strong>Return URL Validation:</strong> The return URL must match the domain that initiated the request. If you need subdomain matching, your site administrator can enable this for your account or domain—contact <strong>partners@streamingtools.com</strong> for assistance.</li>
                             <li><strong>Client Secrets:</strong> Your Client Secret is stored securely and never exposed
-                                to the frontend</li>
-                            <li><strong>Default vs Specific:</strong> Use "Default" for all domains, or assign specific
-                                OAuth apps per domain for isolation</li>
+                                to the frontend.</li>
+                            <li><strong>Hosted Service:</strong> If you use StreamersConnect (hosted), no installation steps are required—signing keys, token lifecycle and cleanup are handled by the service. To enable server-to-server integrations create an API key from the "API Access" section of this dashboard; the key is shown only once when created, so store it securely.</li>
+                            <li><strong>Server-side Token Exchange:</strong> After a user completes OAuth, the callback may include a short-lived, single-use <code>server_token</code>. Send that token from your backend (never from client-side code) to the Token Exchange endpoint with your API key to retrieve the full auth payload:
+                                <pre><code>curl -X POST https://streamersconnect.com/token_exchange.php \
+  -H 'Content-Type: application/json' \
+  -H 'X-API-Key: &lt;your_api_key&gt;' \
+  -d '{"server_token":"<token>"}'</code></pre>
+                                On success you receive the full payload. If the token is expired or already consumed the endpoint returns HTTP 410 (Gone). Keep API keys secret and call this endpoint from trusted backend servers only.</li>
+                            <li><strong>Signature Verification:</strong> If you prefer not to store signing keys, call the Verify endpoint with a signed payload (<code>auth_data_sig</code>) to validate and retrieve the auth information:
+                                <pre><code>curl -X POST https://streamersconnect.com/verify_auth_sig.php \
+  -H 'Content-Type: application/json' \
+  -H 'X-API-Key: &lt;your_api_key&gt;' \
+  -d '{"auth_data_sig":"<v1...>"}'</code></pre>
+                                This returns the verified payload and avoids sharing signing secrets. Use your dashboard API key in the <code>X-API-Key</code> header.</li>
+                            <li><strong>Key Management &amp; Rotation:</strong> StreamersConnect manages signing key rotation and lifecycle for our hosted customers. For your API keys, you can rotate or revoke them from the "API Access" UI in this dashboard.</li>
+                            <li><strong>Cleanup:</strong> Expired or consumed tokens are removed automatically by StreamersConnect as part of normal maintenance.</li>
+                            <li><strong>Protect endpoints:</strong> For production, protect <code>/token_exchange.php</code> and <code>/verify_auth_sig.php</code> with API keys, mTLS, or IP allowlists. We can implement DB-backed API keys and admin UI to manage them.</li>
+                            <li><strong>Default vs Specific:</strong> Use "Default" for all domains, or assign specific OAuth apps per domain for isolation.</li>
                         </ul>
                         <h4><i class="fas fa-question"></i> Need Help?</h4>
                         <p>If you need assistance, contact: <strong>partners@streamingtools.com</strong></p>
@@ -1547,6 +1576,17 @@ if (isset($_GET['auth_data'])) {
                 <button disabled class="btn-disabled">Save Configuration (Coming Soon)</button>
             <?php endif; ?>
         </div>
+        <!-- API Access -->
+        <div class="info-box">
+            <h3><i class="fas fa-key"></i> API Access</h3>
+            <p class="info-text-white">Create a single API key for server-to-server access to <code>/token_exchange.php</code> and <code>/verify_auth_sig.php</code>. You can rotate or revoke your key at any time.</p>
+            <div id="apiClientContainer">
+                <p>Loading...</p>
+            </div>
+            <?php if ($isWhitelisted): ?>
+                <!-- Create button is provided inline in the API card when needed -->
+            <?php endif; ?>
+        </div>
         <!-- Webhook Management -->
         <div class="info-box">
             <h3><i class="fas fa-bell"></i> Webhook Management</h3>
@@ -1626,6 +1666,27 @@ if (isset($_GET['auth_data'])) {
             <p>&copy; <?php echo date('Y'); ?> StreamersConnect - Part of the StreamingTools Ecosystem</p>
         </div>
     </div>
+
+    <!-- API Key Modal (shows API key once on create/rotate) -->
+    <div id="apiKeyModal" class="modal">
+        <div class="modal-background"></div>
+        <div class="modal-card">
+            <header class="modal-card-head">
+                <p class="modal-card-title">API Key</p>
+                <button class="delete" aria-label="close" onclick="closeApiKeyModal()"></button>
+            </header>
+            <section class="modal-card-body">
+                <p class="help">This key is sensitive — copy and store it securely. You can reveal it later from this dashboard if needed.</p>
+                <textarea id="apiKeyText" class="api-key-block" rows="1" readonly>(hidden)</textarea>
+                <div style="margin-top:0.5rem; display:flex; gap:0.5rem;">
+                    <button class="btn" id="copyApiKeyBtn">Copy Key</button>
+                    <button class="btn" id="closeApiKeyBtn">Close</button>
+                </div>
+            </section>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <script src="https://cdn.jsdelivr.net/npm/toastify-js"></script>
     <script>
         // AJAX save for service config
@@ -1659,7 +1720,215 @@ if (isset($_GET['auth_data'])) {
                     el.textContent = timeAgoJS(iso);
                 }
             });
+
+            // Initialize API client section
+            initApiClientSection();
         });
+
+        // API client UI functions
+        function escapeHtml(text) {
+            return String(text).replace(/[&"'<>]/g, function (s) {
+                return ({'&':'&amp;','"':'&quot;','\'':'&#39;','<':'&lt;','>':'&gt;'}[s]);
+            });
+        }
+
+        function initApiClientSection() {
+            const container = document.getElementById('apiClientContainer');
+            const createBtn = document.getElementById('createApiKeyBtn');
+            if (!container) return;
+            fetch('/api_clients.php', { credentials: 'same-origin' })
+                .then(r => {
+                    if (!r.ok) return r.text().then(t => { throw new Error(t || ('HTTP ' + r.status)); });
+                    return r.json();
+                })
+                .then(res => {
+                    if (!res.success) {
+                        container.innerHTML = '<div class="notification is-danger">Failed to load API client info.</div>';
+                        return;
+                    }
+                    const client = res.client || (res.clients && res.clients.length ? res.clients[0] : null);
+                    if (!client) {
+                        container.innerHTML = `
+                            <div class="api-card">
+                                <div class="api-empty">
+                                    <p class="muted">No API key has been created yet.</p>
+                                    <div style="margin-top:1rem;">
+                                        <button class="btn btn-light" id="createApiKeyInlineBtn">Create API Key</button>
+                                    </div>
+                                </div>
+                            </div>`;
+                        if (createBtn) createBtn.style.display = 'inline-block';
+                        const inlineBtn = document.getElementById('createApiKeyInlineBtn');
+                        if (inlineBtn) inlineBtn.addEventListener('click', function () { performCreateApiClient(inlineBtn); });
+                    } else {
+                        if (createBtn) createBtn.style.display = 'none';
+                        const masked = client.api_key ? ('****' + client.api_key.slice(-6)) : 'Hidden';
+                        let html = `
+                            <div class="api-card">
+                                <div class="api-row api-header">
+                                    <div style="flex:1"><strong>${escapeHtml(client.name || 'API Key')}</strong></div>
+                                    <div class="api-meta muted">${client.is_active == 1 ? 'Active' : 'Inactive'}</div>
+                                </div>
+                                <div class="api-row">
+                                    <div class="label">Client ID</div>
+                                    <div class="value"><code>${escapeHtml(client.client_id)}</code>
+                                        <button class="btn btn-small" id="copyClientIdBtn" title="Copy client id" style="margin-left:0.5rem"><i class="fas fa-copy"></i></button>
+                                    </div>
+                                </div>
+                                <div class="api-row">
+                                    <div class="label">API Key</div>
+                                    <div class="value"><code id="maskedApiKey">${escapeHtml(masked)}</code>
+                                        <button class="btn btn-small" id="revealApiKeyBtn" title="Reveal API Key" style="margin-left:0.5rem">Reveal</button>
+                                    </div>
+                                </div>
+                                <div class="api-row">
+                                    <div class="label">Last Used</div>
+                                    <div class="value">${client.last_used ? escapeHtml(new Date(client.last_used).toLocaleString()) : 'Never'}</div>
+                                </div>
+                                <div class="api-actions center-row" style="margin-top:1rem; gap:0.5rem">
+                                    <button class="btn btn-light" id="rotateApiKeyBtn"><i class="fas fa-sync"></i> Rotate</button>
+                                    <button class="btn btn-danger" id="revokeApiKeyBtn"><i class="fas fa-trash"></i> Revoke</button>
+                                </div>
+                            </div>`;
+                        container.innerHTML = html;
+                        document.getElementById('rotateApiKeyBtn').addEventListener('click', function () { rotateKey(client.client_id); });
+                        document.getElementById('revokeApiKeyBtn').addEventListener('click', function () { revokeKey(client.client_id); });
+                        document.getElementById('copyClientIdBtn').addEventListener('click', function () { navigator.clipboard.writeText(client.client_id).then(function () { Toastify({ text: 'Client ID copied', duration: 2000, gravity: 'top', position: 'right', backgroundColor: '#48bb78' }).showToast(); }).catch(function () { Toastify({ text: 'Copy failed', duration: 2000, gravity: 'top', position: 'right', backgroundColor: '#ef4444' }).showToast(); }); });
+                        document.getElementById('revealApiKeyBtn').addEventListener('click', function () {
+    Swal.fire({
+        title: 'Reveal API key?',
+        text: 'This will show the API key on your screen. Make sure you are in a private environment.',
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonText: 'Reveal',
+        cancelButtonText: 'Cancel',
+        reverseButtons: true
+    }).then((result) => {
+        if (!result.isConfirmed) return;
+        const clientId = client.client_id;
+        Swal.fire({ title: 'Revealing...', allowOutsideClick: false, didOpen: () => Swal.showLoading(), showConfirmButton: false });
+        fetch('/api_clients.php', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'reveal', client_id: clientId }),
+            credentials: 'same-origin'
+        })
+        .then(r => {
+            if (!r.ok) return r.text().then(t => { throw new Error(t || ('HTTP ' + r.status)); });
+            return r.json();
+        })
+        .then(res => {
+            Swal.close();
+            if (res.success) {
+                showApiKeyModal(res.api_key);
+            } else {
+                Swal.fire('Error', res.error || 'Reveal failed', 'error');
+            }
+        }).catch(err => { Swal.fire('Error', err.message || 'Reveal failed', 'error'); });
+    });
+});
+                    }
+                })
+                .catch(err => {
+                    container.innerHTML = '<div class="notification is-danger">Failed to load API client info: ' + escapeHtml(err.message || 'Unknown error') + '</div>';
+                });
+
+            function performCreateApiClient(button) {
+                if (button) button.disabled = true;
+                fetch('/api_clients.php', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ action: 'create', name: 'API Key' }),
+                    credentials: 'same-origin'
+                })
+                    .then(r => {
+                        if (button) button.disabled = false;
+                        if (!r.ok) return r.text().then(t => { throw new Error(t || ('HTTP ' + r.status)); });
+                        return r.json();
+                    })
+                    .then(res => {
+                        if (res.success) {
+                            showApiKeyModal(res.api_key);
+                            initApiClientSection();
+                        } else {
+                            Toastify({ text: res.error || 'Create failed', duration: 3000, gravity: 'top', position: 'right', style: { background: '#ef4444' } }).showToast();
+                        }
+                    }).catch((err) => { if (button) button.disabled = false; Toastify({ text: err.message || 'Request failed', duration: 3000, gravity: 'top', position: 'right', style: { background: '#ef4444' } }).showToast(); });
+            }
+            if (createBtn) {
+                createBtn.addEventListener('click', function () { performCreateApiClient(createBtn); });
+            }
+        }
+
+        function rotateKey(clientId) {
+            if (!confirm('Rotate the API key? This will invalidate the previous key.')) return;
+            fetch('/api_clients.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action: 'rotate', client_id: clientId }),
+                credentials: 'same-origin'
+            })
+                .then(r => {
+                    if (!r.ok) return r.text().then(t => { throw new Error(t || ('HTTP ' + r.status)); });
+                    return r.json();
+                })
+                .then(res => {
+                    if (res.success) {
+                        showApiKeyModal(res.api_key);
+                        initApiClientSection();
+                    } else {
+                        Toastify({ text: res.error || 'Rotate failed', duration: 3000, gravity: 'top', position: 'right', style: { background: '#ef4444' } }).showToast();
+                    }
+                }).catch(err => { Toastify({ text: err.message || 'Rotate failed', duration: 3000, gravity: 'top', position: 'right', style: { background: '#ef4444' } }).showToast(); });
+        }
+
+        function revokeKey(clientId) {
+            if (!confirm('Revoke the API key? This will disable it.')) return;
+            fetch('/api_clients.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action: 'deactivate', client_id: clientId }),
+                credentials: 'same-origin'
+            })
+                .then(r => {
+                    if (!r.ok) return r.text().then(t => { throw new Error(t || ('HTTP ' + r.status)); });
+                    return r.json();
+                })
+                .then(res => {
+                    if (res.success) {
+                        initApiClientSection();
+                    } else {
+                        Toastify({ text: res.error || 'Revoke failed', duration: 3000, gravity: 'top', position: 'right', style: { background: '#ef4444' } }).showToast();
+                    }
+                }).catch(err => { Toastify({ text: err.message || 'Revoke failed', duration: 3000, gravity: 'top', position: 'right', style: { background: '#ef4444' } }).showToast(); });
+        }
+
+        function showApiKeyModal(key) {
+            const modal = document.getElementById('apiKeyModal');
+            const keyEl = document.getElementById('apiKeyText');
+            // Fill textarea and select for easy copying
+            keyEl.value = key;
+            modal.classList.add('is-active');
+            keyEl.style.height = 'auto';
+            keyEl.rows = 1;
+            keyEl.focus();
+            try {
+                keyEl.select();
+                keyEl.setSelectionRange(0, keyEl.value.length);
+                // Scroll to end so long keys are visible
+                keyEl.scrollLeft = 0;
+            } catch (e) { console.log('select failed', e); }
+            document.getElementById('copyApiKeyBtn').onclick = function () {
+                navigator.clipboard.writeText(keyEl.value).then(function () { Toastify({ text: 'Copied to clipboard', duration: 2000, gravity: 'top', position: 'right', backgroundColor: '#48bb78' }).showToast(); }).catch(function () { Toastify({ text: 'Copy failed', duration: 2000, gravity: 'top', position: 'right', backgroundColor: '#ef4444' }).showToast(); });
+            };
+            document.getElementById('closeApiKeyBtn').onclick = function () { closeApiKeyModal(); };
+        }
+
+        function closeApiKeyModal() {
+            const modal = document.getElementById('apiKeyModal');
+            modal.classList.remove('is-active');
+        }
+
         function timeAgoJS(dateString) {
             const now = new Date();
             let then = new Date(dateString);
@@ -1674,6 +1943,6 @@ if (isset($_GET['auth_data'])) {
             if (diff < 86400) return Math.floor(diff / 3600) + 'h ago';
             return Math.floor(diff / 86400) + 'd ago';
         }
-    </script>
+    </script>    </script>
 </body>
 </html>

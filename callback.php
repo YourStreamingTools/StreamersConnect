@@ -113,13 +113,26 @@ if (isset($_GET['code']) && isset($_GET['state'])) {
         $redirectUrl = 'https://' . STREAMERS_CONNECT_DOMAIN . '/';
     } else {
         // External service authentication - send auth_data back
-        // Clear session data
+        // Clear sensitive session data we don't need anymore
         unset($_SESSION['oauth_state'], $_SESSION['return_url'], $_SESSION['origin_domain'], $_SESSION['requested_scopes'], $_SESSION['auth_service'], $_SESSION['custom_client_id'], $_SESSION['custom_client_secret']);
-        // Encode the data as JWT or encrypted string (for production, use proper encryption)
-        $encodedData = base64_encode(json_encode($returnData));
+        // Legacy: encode the data as base64 JSON (kept for backwards compatibility)
+        $legacy = base64_encode(json_encode($returnData));
         // Build redirect URL
         $separator = strpos($returnUrl, '?') !== false ? '&' : '?';
-        $redirectUrl = $returnUrl . $separator . 'auth_data=' . urlencode($encodedData);
+        $redirectUrl = $returnUrl . $separator . 'auth_data=' . urlencode($legacy);
+        // Additionally provide a signed token (HMAC-SHA256) for receivers able to verify authenticity.
+        if (defined('AUTH_DATA_SIGNING_KEY') && AUTH_DATA_SIGNING_KEY) {
+            $signed = create_signed_auth_data($returnData);
+            if ($signed) {
+                $redirectUrl .= '&auth_data_sig=' . urlencode($signed);
+            }
+        }
+        // Create a short-lived server-side token the partner can exchange for the payload
+        // (useful for keeping sensitive tokens off of URLs / client logs)
+        $serverToken = create_server_token($returnData, $displayOrigin ?? $originDomain ?? null);
+        if ($serverToken) {
+            $redirectUrl .= '&server_token=' . urlencode($serverToken);
+        }
     }
 }
 

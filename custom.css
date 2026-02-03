@@ -49,6 +49,24 @@
     background: linear-gradient(90deg, #059669 0%, #0ea5e9 100%) !important;
 }
 
+/* API Access card styling */
+.api-card { background: rgba(255,255,255,0.03); padding: 1rem; border-radius: 6px; border: 1px solid rgba(255,255,255,0.04); }
+.api-row { display:flex; align-items:center; padding: 0.45rem 0; border-bottom: 1px solid rgba(255,255,255,0.02); }
+.api-row:last-child { border-bottom: none; }
+.api-row .label { width:120px; color:#9aa7b2; font-size:0.95rem; }
+.api-row .value { flex:1; display:flex; align-items:center; }
+.api-header { font-size:1.05rem; margin-bottom:0.25rem; }
+.api-meta { color:#a3b0bb; font-size:0.9rem; }
+.muted { color:#a3b0bb; }
+.api-actions .btn { min-width:120px; }
+.btn-small { padding: 6px 8px; font-size:0.86rem; border-radius:4px; }
+
+/* API Key reveal block */
+.api-key-block { width:100%; padding:0.75rem 1rem; border-radius:6px; background:#0d1117; color:#f8f8f2; font-family: 'Courier New', monospace; font-size:1rem; border:1px solid rgba(255,255,255,0.06); resize:none; white-space: pre; overflow-x: auto; overflow-y: hidden; }
+.api-key-block:focus { outline: 2px solid rgba(102,126,234,0.2); }
+.api-key-block::-webkit-scrollbar { height:8px; }
+.api-key-block::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.06); border-radius: 8px; }
+
 /* OAuth Help Modal */
 #oauthHelpModal .modal-card {
     width: 90% !important;

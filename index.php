@@ -6,7 +6,18 @@ require_once '/var/www/config/streamersconnect.php';
 
 // Handle auth callback for internal login
 if (isset($_GET['auth_data'])) {
-    $authData = json_decode(base64_decode($_GET['auth_data']), true);
+    $authData = null;
+    // Prefer signed payload if present and valid
+    if (isset($_GET['auth_data_sig']) && function_exists('verify_signed_auth_data')) {
+        $verified = verify_signed_auth_data($_GET['auth_data_sig']);
+        if ($verified !== false) {
+            $authData = $verified;
+        }
+    }
+    // Fallback to legacy base64 encoded payload
+    if (!$authData) {
+        $authData = json_decode(base64_decode($_GET['auth_data']), true);
+    }
     if (isset($authData['success']) && $authData['success'] && $authData['service'] === 'twitch') {
         // Store user session
         $_SESSION['user_id'] = $authData['user']['id'];
@@ -71,9 +82,8 @@ if (isset($_GET['service']) && isset($_GET['login']) && isset($_GET['scopes'])) 
         die('Error: return_url parameter is required');
     }
     $returnUrl = $_GET['return_url'];
-    $returnUrlHost = parse_url($returnUrl, PHP_URL_HOST);
-    // Security: Ensure return URL's domain matches the login domain
-    if ($returnUrlHost !== $originDomain) {
+    // Security: Ensure return URL's domain matches the login domain (exact or based on config)
+    if (!is_valid_return_url_for_origin($returnUrl, $originDomain)) {
         http_response_code(403);
         die('Error: Return URL domain does not match origin domain. Security violation detected.');
     }
