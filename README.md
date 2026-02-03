@@ -145,25 +145,56 @@ Create a callback handler at the URL you specified in `return_url`. StreamersCon
 <?php
 session_start();
 
-if (isset($_GET['auth_data'])) {
-    $encodedData = $_GET['auth_data'];
-    $authData = json_decode(base64_decode($encodedData), true);
-    if ($authData && $authData['success']) {
-        // Implement your own logic here:
-        // - Store tokens in database
-        // - Create user session
-        // - Log authentication
-        // - Redirect to appropriate page
-        $_SESSION['twitch_access_token'] = $authData['access_token'];
-        $_SESSION['twitch_user'] = $authData['user'];
-        header('Location: /dashboard.php');
-        exit;
+// Preferred flow: verify signed payload server-side
+if (isset($_GET['auth_data_sig'])) {
+    $sig = $_GET['auth_data_sig'];
+    $ch = curl_init('https://streamersconnect.com/verify_auth_sig.php');
+    curl_setopt($ch, CURLOPT_POST, true);
+    curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode(['auth_data_sig' => $sig]));
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_HTTPHEADER, ['Content-Type: application/json', 'X-API-Key: "<your_api_key>"']);
+    $res = curl_exec($ch);
+    $http = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+    if ($res && $http === 200) {
+        $payload = json_decode($res, true);
+        if (!empty($payload['success']) && !empty($payload['payload'])) {
+            $authData = $payload['payload'];
+            // proceed: store tokens, create session, etc.
+        }
     }
+} elseif (isset($_GET['server_token'])) {
+    // Alternative: exchange server_token for payload
+    $token = $_GET['server_token'];
+    $ch = curl_init('https://streamersconnect.com/token_exchange.php');
+    curl_setopt($ch, CURLOPT_POST, true);
+    curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode(['server_token' => $token]));
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_HTTPHEADER, ['Content-Type: application/json', 'X-API-Key: "<your_api_key>"']);
+    $res = curl_exec($ch);
+    $http = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+    if ($res && $http === 200) {
+        $payload = json_decode($res, true);
+        if (!empty($payload['success']) && !empty($payload['payload'])) {
+            $authData = $payload['payload'];
+            // proceed
+        }
+    }
+} else {
+    // Legacy fallback (deprecated): decode base64 auth_data
+    $authData = json_decode(base64_decode($_GET['auth_data'] ?? ''), true);
 }
 
-// Handle authentication errors
+// Handle authData or errors as needed
+if (!empty($authData) && !empty($authData['success'])) {
+    $_SESSION['twitch_access_token'] = $authData['access_token'];
+    $_SESSION['twitch_user'] = $authData['user'];
+    header('Location: /dashboard.php');
+    exit;
+}
+
 if (isset($_GET['error'])) {
-    // Implement your own error handling
     die('Authentication failed: ' . htmlspecialchars($_GET['error_description']));
 }
 ?>
@@ -181,7 +212,9 @@ if (isset($_GET['error'])) {
 
 ### Response Parameters (returned to your service)
 
-The authentication data is returned as a base64-encoded JSON object in the `auth_data` parameter:
+Primary response methods are `auth_data_sig` (signed payload) or `server_token` (short-lived). When verified or exchanged server-side they return the auth payload shown below. (A legacy `auth_data` base64 JSON may still be present for compatibility but is deprecated.)
+
+The authentication payload has the following structure:
 
 ```json
 {
