@@ -1,5 +1,5 @@
 <?php
-require_once __DIR__ . '/../config/streamersconnect.php';
+require_once '/var/www/config/streamersconnect.php';
 // This script is intended to be run from CLI via cron. If accessed via web, return 403.
 if (php_sapi_name() !== 'cli') {
     echo "This script is CLI-only.\n";
