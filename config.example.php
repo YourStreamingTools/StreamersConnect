@@ -358,7 +358,7 @@ function isWhitelistedUser($twitchId) {
         error_log("isWhitelistedUser: Database connection failed");
         return false;
     }
-    $stmt = $conn->prepare("SELECT id FROM dashboard_whitelist WHERE twitch_id = ?");
+    $stmt = $conn->prepare("SELECT id FROM dashboard_whitelist WHERE twitch_id = ? AND allow = 1");
     $stmt->bind_param("s", $twitchId);
     $stmt->execute();
     $result = $stmt->get_result();

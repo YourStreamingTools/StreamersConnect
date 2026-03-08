@@ -162,6 +162,49 @@ function buildDiscordAuthUrl($scopes, $customClientId = null, $originDomain = nu
     $_SESSION['oauth_state'] = $params['state'];
     return 'https://discord.com/api/oauth2/authorize?' . http_build_query($params);
 }
+
+// If user is logged in, check authorization and redirect or show access-denied
+if (isset($_SESSION['user_id'])) {
+    $loggedInTwitchId = $_SESSION['user_id'];
+    $loggedInUserLogin = $_SESSION['user_login'];
+    $loggedInDisplayName = $_SESSION['user_display_name'];
+    $loggedInEmail = $_SESSION['user_email'] ?? '';
+    $isAuthorized = isWhitelistedUser($loggedInTwitchId);
+    // Fallback: check by username for users not yet migrated to ID-based lookup
+    if (!$isAuthorized) {
+        $conn = getStreamersConnectDB();
+        if ($conn) {
+            $stmt = $conn->prepare("SELECT id FROM dashboard_whitelist WHERE user_login = ? AND (twitch_id IS NULL OR twitch_id = '') AND allow = 1");
+            $stmt->bind_param('s', $loggedInUserLogin);
+            $stmt->execute();
+            $result = $stmt->get_result();
+            if ($result->num_rows > 0) {
+                $isAuthorized = true;
+            }
+            $stmt->close();
+        }
+    }
+    // Register every logged-in user in the whitelist table with allow=0 if not already present.
+    // On duplicate (twitch_id), update login/display/email/last_login but never downgrade allow.
+    $conn = getStreamersConnectDB();
+    if ($conn) {
+        $stmt = $conn->prepare("
+            INSERT INTO dashboard_whitelist (user_login, twitch_id, display_name, email, allow, added_by, notes)
+            VALUES (?, ?, ?, ?, 0, 'system', 'Auto-registered on login')
+            ON DUPLICATE KEY UPDATE
+                user_login    = VALUES(user_login),
+                display_name  = VALUES(display_name),
+                email         = VALUES(email),
+                last_login    = NOW(),
+                updated_at    = NOW()
+        ");
+        $stmt->bind_param('ssss', $loggedInUserLogin, $loggedInTwitchId, $loggedInDisplayName, $loggedInEmail);
+        $stmt->execute();
+        $stmt->close();
+    }
+} else {
+    $isAuthorized = false;
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -172,14 +215,12 @@ function buildDiscordAuthUrl($scopes, $customClientId = null, $originDomain = nu
     <link rel="icon" href="https://cdn.yourstreamingtools.com/img/logo.ico">
     <link rel="apple-touch-icon" href="https://cdn.yourstreamingtools.com/img/logo.ico">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.css">
-    <!-- Bulma CSS 1.0.4 -->
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bulma@1.0.4/css/bulma.min.css">
-    <!-- Custom CSS -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bulma@1.0.4/css/bulma.css">
     <link rel="stylesheet" href="custom.css?v=<?php echo filemtime(__DIR__ . '/custom.css'); ?>">
 </head>
 <body>
-    <?php if (isset($_SESSION['user_id'])): ?>
-        <!-- Partner Dashboard - Coming Soon -->
+    <?php if (isset($_SESSION['user_id']) && $isAuthorized): ?>
+        <!-- Authorized user -->
         <div class="container container-dark">
             <div class="logo"><i class="fas fa-lock"></i></div>
             <h1>StreamersConnect</h1>
@@ -190,25 +231,31 @@ function buildDiscordAuthUrl($scopes, $customClientId = null, $originDomain = nu
             <div class="info-box">
                 <h3><i class="fas fa-user"></i> Welcome, <?php echo htmlspecialchars($_SESSION['user_display_name']); ?>!</h3>
             </div>
-            <div class="info-box dashboard-highlight">
-                <h3><i class="fas fa-rocket"></i> Partner Dashboard</h3>
-                <p>Access your exclusive dashboard to manage integrations, view analytics, and configure OAuth applications.</p>
-                <p class="mt-1rem"><strong>Available Features:</strong></p>
-                <ul class="feature-list">
-                    <li><i class="fas fa-key"></i> OAuth Application Management</li>
-                    <li><i class="fas fa-chart-bar"></i> Authentication Analytics</li>
-                    <li><i class="fas fa-cog"></i> Service Configuration</li>
-                    <li><i class="fas fa-bell"></i> Webhook Management</li>
-                    <li><i class="fas fa-shield-alt"></i> Security & Compliance Tools</li>
-                </ul>
-                <a href="dashboard.php" class="btn btn-light">
+            <div class="info-box">
+                <h3><i class="fas fa-tachometer-alt"></i> Dashboard</h3>
+                <p>Manage your integrations, view analytics, and configure OAuth applications.</p>
+                <a href="dashboard.php" class="btn btn-light mt-1rem">
                     <i class="fas fa-tachometer-alt"></i> Go to Dashboard
                 </a>
             </div>
+        </div>
+    <?php elseif (isset($_SESSION['user_id'])): ?>
+        <!-- Unauthorized logged-in user - permission required -->
+        <div class="container container-dark">
+            <div class="logo"><i class="fas fa-lock"></i></div>
+            <h1>StreamersConnect</h1>
+            <p class="subtitle">Authentication Service</p>
+            <div class="center-row">
+                <a href="?logout=1" class="btn btn-logout zero-margin">Logout</a>
+            </div>
             <div class="info-box">
-                <h3><i class="fas fa-handshake"></i> Become a Partner</h3>
-                <p>Interested in integrating StreamersConnect into your application? Contact our team to discuss partnership opportunities and get early access to the dashboard.</p>
-                <p class="mt-1rem"><strong>Email:</strong> partners@streamingtools.com</p>
+                <h3><i class="fas fa-user"></i> Welcome, <?php echo htmlspecialchars($_SESSION['user_display_name']); ?>!</h3>
+            </div>
+            <div class="info-box">
+                <h3><i class="fas fa-exclamation-circle"></i> Access Required</h3>
+                <p>Your account does not currently have permission to access the StreamersConnect dashboard or manage service settings.</p>
+                <p class="mt-1rem">If you would like to use our unified login system, you may request access. Permission to use our service is granted solely at the discretion of <strong>YourStreamingTools</strong>, a subsidiary of LochStudios.</p>
+                <p class="mt-1rem">To enquire, please email: <a href="mailto:partners@streamingtools.com">partners@streamingtools.com</a></p>
             </div>
         </div>
     <?php else: ?>
