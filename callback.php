@@ -90,6 +90,8 @@ if (isset($_GET['code']) && isset($_GET['state'])) {
     }
     // Log successful authentication
     logAuthAttempt($service, $originDomain, $returnData['user'], $requestedScopes, true);
+    // Dispatch webhook notifications (standard or Discord embed)
+    dispatch_webhooks($service, $originDomain, $returnData['user'], 'authentication_success');
     // Store origin domain for display (before clearing session)
     $displayOrigin = $originDomain;
     // Check if this is StreamersConnect's own authentication (dashboard or base URL)
@@ -147,6 +149,7 @@ if (isset($_GET['error'])) {
     // Log failed authentication
     if ($displayOrigin) {
         logAuthAttempt($service, $displayOrigin, [], $requestedScopes, false, $errorDescription);
+        dispatch_webhooks($service, $displayOrigin, [], 'authentication_failure');
     }
     // Set error state for display
     $authError = true;

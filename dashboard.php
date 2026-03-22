@@ -230,7 +230,7 @@ if ($isWhitelisted) {
             $action = $_POST['action'] ?? '';
             header('Content-Type: application/json');
             if ($action === 'list') {
-                $stmt = $conn->prepare("SELECT id, name, webhook_url, secret, event_success, event_failure, created_at FROM webhooks WHERE twitch_id = ? ORDER BY id DESC");
+                $stmt = $conn->prepare("SELECT id, name, webhook_url, secret, event_success, event_failure, is_discord, created_at FROM webhooks WHERE twitch_id = ? ORDER BY id DESC");
                 $stmt->bind_param('s', $twitchId);
                 $stmt->execute();
                 $result = $stmt->get_result();
@@ -247,6 +247,7 @@ if ($isWhitelisted) {
                 $webhookUrl = trim($_POST['webhook_url'] ?? '');
                 $eventSuccess = isset($_POST['event_success']) ? 1 : 0;
                 $eventFailure = isset($_POST['event_failure']) ? 1 : 0;
+                $isDiscord = isset($_POST['is_discord']) ? 1 : 0;
                 if (empty($name)) {
                     echo json_encode(['success' => false, 'message' => 'Webhook name is required']);
                     exit;
@@ -261,21 +262,21 @@ if ($isWhitelisted) {
                 }
                 if ($id > 0) {
                     // Update (don't change secret on update)
-                    $stmt = $conn->prepare("UPDATE webhooks SET name = ?, webhook_url = ?, event_success = ?, event_failure = ? WHERE id = ? AND twitch_id = ?");
-                    $stmt->bind_param('ssiiis', $name, $webhookUrl, $eventSuccess, $eventFailure, $id, $twitchId);
+                    $stmt = $conn->prepare("UPDATE webhooks SET name = ?, webhook_url = ?, event_success = ?, event_failure = ?, is_discord = ? WHERE id = ? AND twitch_id = ?");
+                    $stmt->bind_param('ssiiiis', $name, $webhookUrl, $eventSuccess, $eventFailure, $isDiscord, $id, $twitchId);
                 } else {
-                    // Insert - use provided secret or generate one
+                    // Insert - use provided secret or generate one (Discord webhooks do not need a secret)
                     $secret = trim($_POST['secret'] ?? '');
-                    if (empty($secret)) {
+                    if (empty($secret) && !$isDiscord) {
                         $secret = bin2hex(random_bytes(32));
                     }
                     // Validate secret length (max 64 characters)
-                    if (strlen($secret) > 64) {
+                    if (!empty($secret) && strlen($secret) > 64) {
                         echo json_encode(['success' => false, 'message' => 'Secret must be 64 characters or less']);
                         exit;
                     }
-                    $stmt = $conn->prepare("INSERT INTO webhooks (twitch_id, user_login, name, webhook_url, secret, event_success, event_failure) VALUES (?, ?, ?, ?, ?, ?, ?)");
-                    $stmt->bind_param('sssssii', $twitchId, $userLogin, $name, $webhookUrl, $secret, $eventSuccess, $eventFailure);
+                    $stmt = $conn->prepare("INSERT INTO webhooks (twitch_id, user_login, name, webhook_url, secret, event_success, event_failure, is_discord) VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
+                    $stmt->bind_param('sssssiii', $twitchId, $userLogin, $name, $webhookUrl, $secret, $eventSuccess, $eventFailure, $isDiscord);
                 }
                 $success = $stmt->execute();
                 $stmt->close();
@@ -1209,13 +1210,15 @@ if (isset($_GET['auth_data'])) {
                             list.innerHTML = '<div class="alert-info"><i class="fas fa-info-circle"></i> No webhooks configured yet. Click "Add Webhook" to create one.</div>';
                             return;
                         }
-                        var html = '<table class="table-dark" style="margin-top: 1rem;"><thead><tr><th>Name</th><th>Webhook URL</th><th class="center">Success</th><th class="center">Failure</th><th class="center">Actions</th></tr></thead><tbody>';
+                        var html = '<table class="table-dark" style="margin-top: 1rem;"><thead><tr><th>Name</th><th>Webhook URL</th><th class="center">Type</th><th class="center">Success</th><th class="center">Failure</th><th class="center">Actions</th></tr></thead><tbody>';
                         res.webhooks.forEach(function (webhook) {
                             var successIcon = webhook.event_success == 1 ? '<i class="fas fa-check" style="color: #48bb78;"></i>' : '<i class="fas fa-times" style="color: #ef4444;"></i>';
                             var failureIcon = webhook.event_failure == 1 ? '<i class="fas fa-check" style="color: #48bb78;"></i>' : '<i class="fas fa-times" style="color: #ef4444;"></i>';
+                            var typeIcon = webhook.is_discord == 1 ? '<span title="Discord Webhook"><i class="fab fa-discord" style="color: #7289da;"></i> Discord</span>' : '<span title="Standard Webhook"><i class="fas fa-code" style="color: #a0aec0;"></i> Standard</span>';
                             html += '<tr>';
                             html += '<td><strong>' + escapeHtml(webhook.name) + '</strong></td>';
                             html += '<td>' + escapeHtml(webhook.webhook_url) + '</td>';
+                            html += '<td class="center">' + typeIcon + '</td>';
                             html += '<td class="center">' + successIcon + '</td>';
                             html += '<td class="center">' + failureIcon + '</td>';
                             html += '<td class="center nowrap">';
@@ -1240,6 +1243,9 @@ if (isset($_GET['auth_data'])) {
                 document.getElementById('modalWebhookUrl').value = (webhook && webhook.webhook_url) ? webhook.webhook_url : '';
                 document.getElementById('modalEventSuccess').checked = !webhook || webhook.event_success == 1;
                 document.getElementById('modalEventFailure').checked = !webhook || webhook.event_failure == 1;
+                const isDiscord = webhook && webhook.is_discord == 1;
+                document.getElementById('modalIsDiscord').checked = isDiscord;
+                toggleDiscordSecretField(isDiscord);
                 // Show existing secret when editing, or empty for new
                 if (edit && webhook && webhook.secret) {
                     document.getElementById('modalWebhookSecret').value = webhook.secret;
@@ -1258,6 +1264,7 @@ if (isset($_GET['auth_data'])) {
                 const secret = document.getElementById('modalWebhookSecret').value.trim();
                 const eventSuccess = document.getElementById('modalEventSuccess').checked ? 1 : 0;
                 const eventFailure = document.getElementById('modalEventFailure').checked ? 1 : 0;
+                const isDiscord = document.getElementById('modalIsDiscord').checked ? 1 : 0;
                 if (!name) {
                     Toastify({ text: "Webhook name is required", backgroundColor: "#ef4444", duration: 3000 }).showToast();
                     return;
@@ -1275,6 +1282,7 @@ if (isset($_GET['auth_data'])) {
                 if (secret) params.append('secret', secret);
                 if (eventSuccess) params.append('event_success', '1');
                 if (eventFailure) params.append('event_failure', '1');
+                if (isDiscord) params.append('is_discord', '1');
                 fetch('?webhook=1', {
                     method: 'POST',
                     body: params
@@ -1312,6 +1320,26 @@ if (isset($_GET['auth_data'])) {
                 var map = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' };
                 return text.replace(/[&<>"']/g, function (m) { return map[m]; });
             }
+            function toggleDiscordSecretField(isDiscord) {
+                var secretField = document.getElementById('webhookSecretField');
+                if (secretField) {
+                    secretField.style.display = isDiscord ? 'none' : '';
+                }
+            }
+            // Auto-detect Discord URL and check the checkbox accordingly
+            document.addEventListener('DOMContentLoaded', function () {
+                var urlInput = document.getElementById('modalWebhookUrl');
+                if (urlInput) {
+                    urlInput.addEventListener('input', function () {
+                        try {
+                            var host = new URL(this.value.trim()).hostname.toLowerCase();
+                            var isDiscord = host === 'discord.com' || host === 'discordapp.com';
+                            document.getElementById('modalIsDiscord').checked = isDiscord;
+                            toggleDiscordSecretField(isDiscord);
+                        } catch (e) { /* not a valid URL yet */ }
+                    });
+                }
+            });
             function generateWebhookSecret() {
                 const uppercase = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
                 const lowercase = 'abcdefghijklmnopqrstuvwxyz';
@@ -1640,6 +1668,16 @@ if (isset($_GET['auth_data'])) {
                         </div>
                         <p class="help">A secure secret to verify webhook requests. Leave empty to auto-generate on
                             save.</p>
+                    </div>
+                    <div class="field">
+                        <label class="label">Webhook Type</label>
+                        <div class="control">
+                            <label class="checkbox" style="display: block;">
+                                <input type="checkbox" id="modalIsDiscord" onchange="toggleDiscordSecretField(this.checked)">
+                                <i class="fab fa-discord" style="color: #7289da;"></i> This is a Discord incoming webhook URL
+                            </label>
+                        </div>
+                        <p class="help">Check this if the URL is a <code>discord.com/api/webhooks/...</code> URL. The secret field is not used for Discord webhooks.</p>
                     </div>
                     <div class="field">
                         <label class="label">Events to Notify</label>
