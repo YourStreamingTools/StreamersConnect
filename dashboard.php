@@ -402,9 +402,7 @@ if ($isWhitelisted) {
     <title>Partner Dashboard - StreamersConnect</title>
     <link rel="icon" href="https://cdn.yourstreamingtools.com/img/logo.ico">
     <link rel="apple-touch-icon" href="https://cdn.yourstreamingtools.com/img/logo.ico">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.css">
-    <!-- Bulma CSS 1.0.4 -->
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bulma@1.0.4/css/bulma.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/7.0.0/css/all.min.css">
     <!-- Custom CSS -->
     <link rel="stylesheet" href="custom.css?v=<?php echo filemtime(__DIR__ . '/custom.css'); ?>">
 
@@ -447,7 +445,7 @@ if ($isWhitelisted) {
             <h3><i class="fas fa-user"></i> Welcome, <?php echo htmlspecialchars($_SESSION['user_display_name']); ?>!
             </h3>
             <?php if ($isWhitelisted): ?>
-                <p class="whitelisted-badge"><i class="fas fa-check-circle"></i> You have full dashboard access</p>
+                <p class="whitelisted-badge"><i class="fas fa-circle-check"></i> You have full dashboard access</p>
             <?php endif; ?>
         </div>
         <!-- OAuth Application Management -->
@@ -455,7 +453,7 @@ if ($isWhitelisted) {
             <h3>
                 <i class="fas fa-key"></i> OAuth Applications
                 <button class="button is-info is-small is-pulled-right js-modal-trigger" data-target="oauthHelpModal">
-                    <i class="fas fa-question-circle"></i> How To Use
+                    <i class="fas fa-circle-question"></i> How To Use
                 </button>
             </h3>
             <p class="info-text-white">Manage your OAuth applications and credentials.</p>
@@ -544,12 +542,12 @@ if ($isWhitelisted) {
             <div class="modal-background"></div>
             <div class="modal-card">
                 <header class="modal-card-head">
-                    <p class="modal-card-title"><i class="fas fa-question-circle"></i> How To Use OAuth Applications</p>
+                    <p class="modal-card-title"><i class="fas fa-circle-question"></i> How To Use OAuth Applications</p>
                     <button class="delete" aria-label="close"></button>
                 </header>
                 <section class="modal-card-body">
                     <div class="content">
-                        <h4><i class="fas fa-info-circle"></i> Overview</h4>
+                        <h4><i class="fas fa-circle-info"></i> Overview</h4>
                         <p>StreamersConnect allows your websites to authenticate users via Twitch or Discord OAuth.
                             Follow these steps to integrate authentication into your application:</p>
                         <h4><i class="fas fa-list-ol"></i> Setup Steps</h4>
@@ -660,7 +658,7 @@ if (isset($_GET['auth_data'])) {
     }
 }</code></pre>
                         <p class="help"><strong>Note:</strong> For Discord, the user object will have <code>username</code> instead of <code>login</code>, and <code>global_name</code> for display name. The <code>broadcaster_type</code> field is Twitch-specific.</p>
-                        <h4><i class="fas fa-shield-alt"></i> Security Notes</h4>
+                        <h4><i class="fas fa-shield-halved"></i> Security Notes</h4>
                         <ul>
                             <li><strong>Domain Whitelist:</strong> Only domains you add to "Allowed Domains" can use
                                 your OAuth credentials.</li>
@@ -711,7 +709,7 @@ if (isset($_GET['auth_data'])) {
                             return;
                         }
                         if (!res.apps.length) {
-                            list.innerHTML = '<div class="notification is-info is-light has-text-centered"><i class="fas fa-info-circle"></i> No OAuth applications yet. Click "Create New Application" below to get started.</div>';
+                            list.innerHTML = '<div class="notification is-info is-light has-text-centered"><i class="fas fa-circle-info"></i> No OAuth applications yet. Click "Create New Application" below to get started.</div>';
                             return;
                         }
                         let html = `
@@ -729,7 +727,7 @@ if (isset($_GET['auth_data'])) {
                                 <tbody>`;
                         res.apps.forEach(function (app) {
                             const serviceIcon = app.service === 'twitch' ? '<i class="fab fa-twitch"></i>' : '<i class="fab fa-discord"></i>';
-                            const defaultBadge = app.is_default ? '<span class="tag is-success"><i class="fas fa-check-circle"></i> Default</span>' : '<span class="tag is-dark">Custom</span>';
+                            const defaultBadge = app.is_default ? '<span class="tag is-success"><i class="fas fa-circle-check"></i> Default</span>' : '<span class="tag is-dark">Custom</span>';
                             const appJson = JSON.stringify(app).replace(/"/g, '&quot;');
                             html += `
                             <tr data-id="${app.id}">
@@ -796,7 +794,7 @@ if (isset($_GET['auth_data'])) {
                     .then(r => r.json())
                     .then(res => {
                         if (!res.success || !res.domains.length) {
-                            domainCheckboxList.innerHTML = '<p class="has-text-grey-light"><i class="fas fa-info-circle"></i> No domains configured. Add domains first to assign them to specific OAuth applications.</p>';
+                            domainCheckboxList.innerHTML = '<p class="has-text-grey-light"><i class="fas fa-circle-info"></i> No domains configured. Add domains first to assign them to specific OAuth applications.</p>';
                             return;
                         }
                         let html = '';
@@ -969,7 +967,7 @@ if (isset($_GET['auth_data'])) {
                             return;
                         }
                         if (!res.domains.length) {
-                            list.innerHTML = '<div class="notification is-info is-light has-text-centered"><i class="fas fa-info-circle"></i> No domains configured yet. Click "Add Domain" below to get started.</div>';
+                            list.innerHTML = '<div class="notification is-info is-light has-text-centered"><i class="fas fa-circle-info"></i> No domains configured yet. Click "Add Domain" below to get started.</div>';
                             return;
                         }
                         let html = `
@@ -1207,13 +1205,13 @@ if (isset($_GET['auth_data'])) {
                     .then(res => {
                         var list = document.getElementById('webhooksContainer');
                         if (!res.success || !res.webhooks || res.webhooks.length === 0) {
-                            list.innerHTML = '<div class="alert-info"><i class="fas fa-info-circle"></i> No webhooks configured yet. Click "Add Webhook" to create one.</div>';
+                            list.innerHTML = '<div class="alert-info"><i class="fas fa-circle-info"></i> No webhooks configured yet. Click "Add Webhook" to create one.</div>';
                             return;
                         }
                         var html = '<table class="table-dark" style="margin-top: 1rem;"><thead><tr><th>Name</th><th>Webhook URL</th><th class="center">Type</th><th class="center">Success</th><th class="center">Failure</th><th class="center">Actions</th></tr></thead><tbody>';
                         res.webhooks.forEach(function (webhook) {
-                            var successIcon = webhook.event_success == 1 ? '<i class="fas fa-check" style="color: #48bb78;"></i>' : '<i class="fas fa-times" style="color: #ef4444;"></i>';
-                            var failureIcon = webhook.event_failure == 1 ? '<i class="fas fa-check" style="color: #48bb78;"></i>' : '<i class="fas fa-times" style="color: #ef4444;"></i>';
+                            var successIcon = webhook.event_success == 1 ? '<i class="fas fa-check" style="color: #48bb78;"></i>' : '<i class="fas fa-xmark" style="color: #ef4444;"></i>';
+                            var failureIcon = webhook.event_failure == 1 ? '<i class="fas fa-check" style="color: #48bb78;"></i>' : '<i class="fas fa-xmark" style="color: #ef4444;"></i>';
                             var typeIcon = webhook.is_discord == 1 ? '<span title="Discord Webhook"><i class="fab fa-discord" style="color: #7289da;"></i> Discord</span>' : '<span title="Standard Webhook"><i class="fas fa-code" style="color: #a0aec0;"></i> Standard</span>';
                             html += '<tr>';
                             html += '<td><strong>' + escapeHtml(webhook.name) + '</strong></td>';
@@ -1398,7 +1396,7 @@ if (isset($_GET['auth_data'])) {
                 </div>
             </div>
             <?php if (!$isWhitelisted): ?>
-                <p class="analytics-note"><i class="fas fa-info-circle"></i> Real-time analytics coming soon</p>
+                <p class="analytics-note"><i class="fas fa-circle-info"></i> Real-time analytics coming soon</p>
             <?php endif; ?>
         </div>
         <?php if ($isWhitelisted && $domainStats): ?>
@@ -1492,7 +1490,7 @@ if (isset($_GET['auth_data'])) {
                                 } elseif ($auth['service'] === 'discord') {
                                     $serviceLabel = '<i class="fab fa-discord service-discord"></i> Discord';
                                 } else {
-                                    $serviceLabel = '<i class="fas fa-question-circle"></i> ' . htmlspecialchars($auth['service']);
+                                    $serviceLabel = '<i class="fas fa-circle-question"></i> ' . htmlspecialchars($auth['service']);
                                 }
                                 ?>
                                 <tr class="table-row">
@@ -1503,11 +1501,11 @@ if (isset($_GET['auth_data'])) {
                                     <td class="user-col"><?php echo htmlspecialchars($auth['user_login'] ?? 'Unknown'); ?></td>
                                     <td class="status-col">
                                         <?php if ($auth['success']): ?>
-                                            <span class="status-success"><i class="fas fa-check-circle"></i> Success</span>
+                                            <span class="status-success"><i class="fas fa-circle-check"></i> Success</span>
                                         <?php else: ?>
                                             <span class="status-failed"
                                                 title="<?php echo htmlspecialchars($auth['error_message'] ?? 'Unknown error'); ?>"><i
-                                                    class="fas fa-times-circle"></i> Failed</span>
+                                                    class="fas fa-circle-xmark"></i> Failed</span>
                                         <?php endif; ?>
                                     </td>
                                 </tr>

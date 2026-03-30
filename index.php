@@ -214,8 +214,7 @@ if (isset($_SESSION['user_id'])) {
     <title>StreamersConnect - Authentication Service</title>
     <link rel="icon" href="https://cdn.yourstreamingtools.com/img/logo.ico">
     <link rel="apple-touch-icon" href="https://cdn.yourstreamingtools.com/img/logo.ico">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.css">
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bulma@1.0.4/css/bulma.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/7.0.0/css/all.min.css">
     <link rel="stylesheet" href="custom.css?v=<?php echo filemtime(__DIR__ . '/custom.css'); ?>">
 </head>
 <body>
@@ -232,10 +231,10 @@ if (isset($_SESSION['user_id'])) {
                 <h3><i class="fas fa-user"></i> Welcome, <?php echo htmlspecialchars($_SESSION['user_display_name']); ?>!</h3>
             </div>
             <div class="info-box">
-                <h3><i class="fas fa-tachometer-alt"></i> Dashboard</h3>
+                <h3><i class="fas fa-gauge"></i> Dashboard</h3>
                 <p>Manage your integrations, view analytics, and configure OAuth applications.</p>
                 <a href="dashboard.php" class="btn btn-light mt-1rem">
-                    <i class="fas fa-tachometer-alt"></i> Go to Dashboard
+                    <i class="fas fa-gauge"></i> Go to Dashboard
                 </a>
             </div>
         </div>
@@ -252,7 +251,7 @@ if (isset($_SESSION['user_id'])) {
                 <h3><i class="fas fa-user"></i> Welcome, <?php echo htmlspecialchars($_SESSION['user_display_name']); ?>!</h3>
             </div>
             <div class="info-box">
-                <h3><i class="fas fa-exclamation-circle"></i> Access Required</h3>
+                <h3><i class="fas fa-circle-exclamation"></i> Access Required</h3>
                 <p>Your account does not currently have permission to access the StreamersConnect dashboard or manage service settings.</p>
                 <p class="mt-1rem">If you would like to use our unified login system, you may request access. Permission to use our service is granted solely at the discretion of <strong>YourStreamingTools</strong>, a subsidiary of LochStudios.</p>
                 <p class="mt-1rem">To enquire, please email: <a href="mailto:partners@streamingtools.com">partners@streamingtools.com</a></p>

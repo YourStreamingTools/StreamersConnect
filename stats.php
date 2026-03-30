@@ -203,7 +203,7 @@ $stmt->close();
     <title>Statistics - StreamersConnect</title>
     <link rel="icon" href="https://cdn.yourstreamingtools.com/img/logo.ico">
     <link rel="apple-touch-icon" href="https://cdn.yourstreamingtools.com/img/logo.ico">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/7.0.0/css/all.min.css">
     <link rel="stylesheet" href="custom.css?v=<?php echo filemtime(__DIR__ . '/custom.css'); ?>">
 </head>
 
@@ -323,7 +323,7 @@ $stmt->close();
         <!-- Recent Failures -->
         <?php if ($failuresResult->num_rows > 0): ?>
             <div class="info-box">
-                <h3><i class="fas fa-exclamation-triangle"></i> Recent Failed Authentications</h3>
+                <h3><i class="fas fa-triangle-exclamation"></i> Recent Failed Authentications</h3>
                 <div class="table-responsive">
                     <table class="table-error table-sm">
                         <thead>
@@ -395,7 +395,7 @@ $stmt->close();
         <!-- Recent Successful Authentications -->
         <?php if ($recentSuccessfulAuths->num_rows > 0): ?>
             <div class="info-box">
-                <h3><i class="fas fa-check-circle"></i> Recent Successful Authentications</h3>
+                <h3><i class="fas fa-circle-check"></i> Recent Successful Authentications</h3>
                 <p class="info-text-white">Latest successful user logins across all your domains.</p>
                 <div class="table-responsive">
                     <table class="table-light table-sm">
@@ -557,7 +557,7 @@ $stmt->close();
         <!-- Daily Authentication Timeline -->
         <?php if ($dailyTimeline->num_rows > 0): ?>
             <div class="info-box">
-                <h3><i class="fas fa-calendar-alt"></i> Daily Authentication Timeline (Last 30 Days)</h3>
+                <h3><i class="fas fa-calendar-days"></i> Daily Authentication Timeline (Last 30 Days)</h3>
                 <p class="info-text-white">Daily breakdown of authentication activity.</p>
                 <div class="table-responsive">
                     <table class="table-light">
@@ -614,7 +614,7 @@ $stmt->close();
         <!-- All Authenticated Users -->
         <?php if ($allAuthenticatedUsers->num_rows > 0): ?>
             <div class="info-box">
-                <h3><i class="fas fa-user-friends"></i> All Authenticated Users</h3>
+                <h3><i class="fas fa-user-group"></i> All Authenticated Users</h3>
                 <p class="info-text-white">Complete list of users who have successfully authenticated to your domains.</p>
                 <div class="table-responsive">
                     <table class="table-light">
