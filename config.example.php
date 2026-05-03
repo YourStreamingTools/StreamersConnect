@@ -92,14 +92,15 @@ function getDefaultOAuthCredentials($service, $twitchId = null) {
 
 /**
  * Get OAuth credentials for a specific domain
- * Checks if the domain has a custom OAuth app assigned, otherwise gets owner's default
+ * Checks if the domain has a custom OAuth app assigned, otherwise gets owner's default.
+ * Supports wildcard entries (*.example.com) which match any subdomain at any depth.
  */
 function getOAuthCredentialsForDomain($service, $domain) {
     $conn = getStreamersConnectDB();
     if (!$conn) return null;
-    // First try: Look up domain and its assigned OAuth app
+    // First try: exact match - domain with custom OAuth app assigned
     $stmt = $conn->prepare("
-        SELECT oa.client_id, oa.client_secret 
+        SELECT oa.client_id, oa.client_secret
         FROM user_allowed_domains uad
         INNER JOIN oauth_applications oa ON uad.oauth_app_id = oa.id
         WHERE uad.domain = ? AND oa.service = ?
@@ -109,13 +110,28 @@ function getOAuthCredentialsForDomain($service, $domain) {
     $result = $stmt->get_result();
     if ($row = $result->fetch_assoc()) {
         $stmt->close();
-        return [
-            'client_id' => $row['client_id'],
-            'client_secret' => $row['client_secret']
-        ];
+        return ['client_id' => $row['client_id'], 'client_secret' => $row['client_secret']];
     }
     $stmt->close();
-    // Second try: Get domain owner's default OAuth app
+    // Second try: wildcard match - wildcard entries with custom OAuth app assigned
+    $stmt = $conn->prepare("
+        SELECT oa.client_id, oa.client_secret, uad.domain AS pattern
+        FROM user_allowed_domains uad
+        INNER JOIN oauth_applications oa ON uad.oauth_app_id = oa.id
+        WHERE uad.domain LIKE '*.%' AND oa.service = ?
+    ");
+    $stmt->bind_param('s', $service);
+    $stmt->execute();
+    $result = $stmt->get_result();
+    while ($row = $result->fetch_assoc()) {
+        $suffix = substr($row['pattern'], 2);
+        if (str_ends_with($domain, '.' . $suffix)) {
+            $stmt->close();
+            return ['client_id' => $row['client_id'], 'client_secret' => $row['client_secret']];
+        }
+    }
+    $stmt->close();
+    // Third try: exact match - domain owner's default OAuth app
     $stmt = $conn->prepare("
         SELECT oa.client_id, oa.client_secret
         FROM user_allowed_domains uad
@@ -129,28 +145,62 @@ function getOAuthCredentialsForDomain($service, $domain) {
     $result = $stmt->get_result();
     if ($row = $result->fetch_assoc()) {
         $stmt->close();
-        return [
-            'client_id' => $row['client_id'],
-            'client_secret' => $row['client_secret']
-        ];
+        return ['client_id' => $row['client_id'], 'client_secret' => $row['client_secret']];
+    }
+    $stmt->close();
+    // Fourth try: wildcard match - wildcard owner's default OAuth app
+    $stmt = $conn->prepare("
+        SELECT oa.client_id, oa.client_secret, uad.domain AS pattern
+        FROM user_allowed_domains uad
+        INNER JOIN dashboard_whitelist dw ON uad.twitch_id = dw.twitch_id
+        INNER JOIN oauth_applications oa ON dw.user_login = oa.user_login
+        WHERE uad.domain LIKE '*.%' AND oa.service = ? AND oa.is_default = 1
+    ");
+    $stmt->bind_param('s', $service);
+    $stmt->execute();
+    $result = $stmt->get_result();
+    while ($row = $result->fetch_assoc()) {
+        $suffix = substr($row['pattern'], 2);
+        if (str_ends_with($domain, '.' . $suffix)) {
+            $stmt->close();
+            return ['client_id' => $row['client_id'], 'client_secret' => $row['client_secret']];
+        }
     }
     $stmt->close();
     return null;
 }
 
 /**
- * Check if a domain is allowed for authentication
+ * Check if a domain is allowed for authentication.
+ * Supports exact entries and wildcard entries (*.example.com) which match
+ * any subdomain at any depth below the specified base domain.
  */
 function isAllowedDomain($domain) {
     $conn = getStreamersConnectDB();
     if (!$conn) return false;
+    // Exact match
     $stmt = $conn->prepare("SELECT id FROM user_allowed_domains WHERE domain = ? LIMIT 1");
     $stmt->bind_param("s", $domain);
     $stmt->execute();
     $result = $stmt->get_result();
-    $isAllowed = $result->num_rows > 0;
+    if ($result->num_rows > 0) {
+        $stmt->close();
+        return true;
+    }
     $stmt->close();
-    return $isAllowed;
+    // Wildcard match: fetch all *.suffix patterns and check via PHP
+    $stmt = $conn->prepare("SELECT domain FROM user_allowed_domains WHERE domain LIKE '*.%'");
+    $stmt->execute();
+    $result = $stmt->get_result();
+    while ($row = $result->fetch_assoc()) {
+        $suffix = substr($row['domain'], 2); // strip '*.'
+        if (str_ends_with($domain, '.' . $suffix)) {
+            $stmt->close();
+            return true;
+        }
+    }
+    $stmt->close();
+    return false;
 }
 
 /**

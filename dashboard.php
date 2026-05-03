@@ -417,8 +417,8 @@ if ($isWhitelisted) {
         <div class="center-row">
             <a href="/" class="btn btn-small bg-primary zero-margin"><i class="fas fa-home"></i> Home</a>
             <?php if ($isWhitelisted): ?>
-                <a href="/stats.php" class="btn btn-small bg-success zero-margin"><i class="fas fa-chart-line"></i> Detailed
-                    Stats</a>
+                <a href="/stats.php" class="btn btn-small bg-success zero-margin"><i class="fas fa-chart-line"></i> Detailed Stats</a>
+                <a href="/admin.php" class="btn btn-small zero-margin" style="background:#6b46c1;color:#fff;"><i class="fas fa-database"></i> Admin</a>
             <?php endif; ?>
             <a href="?logout=1" class="btn btn-logout zero-margin">Logout</a>
         </div>
@@ -992,9 +992,11 @@ if (isset($_GET['auth_data'])) {
                                 const serviceIcon = domain.service === 'twitch' ? '<i class="fab fa-twitch"></i>' : '<i class="fab fa-discord"></i>';
                                 oauthAppDisplay = `<span class="tag is-primary">${serviceIcon} ${domain.app_name}</span>`;
                             }
+                            const isWildcard = domain.domain.startsWith('*.');
+                            const wildcardBadge = isWildcard ? ' <span class="tag is-warning is-light" title="Matches all subdomains"><i class="fas fa-asterisk"></i>&nbsp;Wildcard</span>' : '';
                             html += `
                         <tr data-id="${domain.id}">
-                            <td><strong>${domain.domain}</strong></td>
+                            <td><strong>${domain.domain}</strong>${wildcardBadge}</td>
                             <td>${oauthAppDisplay}</td>
                             <td>${notes}</td>
                             <td class="is-size-7 has-text-grey-light">${addedDate}</td>
@@ -1076,6 +1078,28 @@ if (isset($_GET['auth_data'])) {
                     Toastify({
                         text: "Domain is required",
                         duration: 3000,
+                        gravity: "top",
+                        position: "right",
+                        backgroundColor: "#ef4444",
+                        stopOnFocus: true
+                    }).showToast();
+                    return;
+                }
+                if (domainValue.includes('*') && !domainValue.startsWith('*.')) {
+                    Toastify({
+                        text: "Wildcard must be at the start: *.example.com",
+                        duration: 4000,
+                        gravity: "top",
+                        position: "right",
+                        backgroundColor: "#ef4444",
+                        stopOnFocus: true
+                    }).showToast();
+                    return;
+                }
+                if (domainValue.startsWith('*.') && !domainValue.slice(2).includes('.')) {
+                    Toastify({
+                        text: "Wildcard requires a valid base domain: *.example.com",
+                        duration: 4000,
                         gravity: "top",
                         position: "right",
                         backgroundColor: "#ef4444",
@@ -1534,9 +1558,10 @@ if (isset($_GET['auth_data'])) {
                             <div class="field">
                                 <label class="label">Domain</label>
                                 <div class="control">
-                                    <input class="input" type="text" id="modalDomain" placeholder="example.com"
+                                    <input class="input" type="text" id="modalDomain" placeholder="example.com or *.example.com"
                                         maxlength="255">
                                 </div>
+                                <p class="help">Use <strong>*.example.com</strong> to allow all subdomains (including nested ones like sub.sub.example.com).</p>
                             </div>
                             <div class="field">
                                 <label class="label">Notes (optional)</label>
