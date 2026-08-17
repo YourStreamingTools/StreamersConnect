@@ -345,15 +345,23 @@ function get_api_client_by_key($apiKey) {
 }
 
 function get_api_client_by_owner($ownerTwitchId) {
+    $clients = list_api_clients_by_owner($ownerTwitchId);
+    return $clients ? $clients[0] : false;
+}
+
+function list_api_clients_by_owner($ownerTwitchId) {
     $conn = getStreamersConnectDB();
-    if (!$conn) return false;
-    $stmt = $conn->prepare("SELECT id, client_id, api_key, name, owner_twitch_id, allowed_origins, is_active, usage_count, last_used, created_at FROM api_clients WHERE owner_twitch_id = ? LIMIT 1");
+    if (!$conn) return [];
+    $stmt = $conn->prepare("SELECT id, client_id, name, owner_twitch_id, allowed_origins, is_active, usage_count, last_used, created_at, RIGHT(api_key, 6) AS api_key_suffix FROM api_clients WHERE owner_twitch_id = ? ORDER BY created_at DESC");
     $stmt->bind_param('s', $ownerTwitchId);
     $stmt->execute();
     $res = $stmt->get_result();
-    if ($row = $res->fetch_assoc()) { $stmt->close(); return $row; }
+    $rows = [];
+    while ($row = $res->fetch_assoc()) {
+        $rows[] = $row;
+    }
     $stmt->close();
-    return false;
+    return $rows;
 }
 
 function get_api_client_by_client_id($clientId) {

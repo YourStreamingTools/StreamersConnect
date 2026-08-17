@@ -39,8 +39,13 @@ try {
                 echo json_encode(['success' => true, 'clients' => $clients]);
                 exit;
             } else {
-                $client = get_api_client_by_owner($_SESSION['user_id']);
-                echo json_encode(['success' => true, 'client' => $client]);
+                if (function_exists('list_api_clients_by_owner')) {
+                    $clients = list_api_clients_by_owner($_SESSION['user_id']);
+                } else {
+                    $one = get_api_client_by_owner($_SESSION['user_id']);
+                    $clients = $one ? [$one] : [];
+                }
+                echo json_encode(['success' => true, 'clients' => $clients]);
                 exit;
             }
         } catch (Throwable $e) {
@@ -62,15 +67,6 @@ if ($method === 'POST') {
             $owner = $body['owner_twitch_id'] ?? ($_SESSION['user_id'] ?? null);
         } else {
             $owner = $_SESSION['user_id'] ?? null;
-        }
-        // If not admin, ensure single-client restriction
-        if (!$isAdmin) {
-            $existing = get_api_client_by_owner($owner);
-            if ($existing) {
-                http_response_code(400);
-                echo json_encode(['success' => false, 'error' => 'You already have an API client. Please rotate or deactivate it.']);
-                exit;
-            }
         }
         if (!$name) {
             http_response_code(400);

@@ -775,7 +775,7 @@ h3 {
 /* ----------------------------------------------------------------
    19. API Card
    ---------------------------------------------------------------- */
-.api-card { background: var(--bg-surface); padding: 1.25rem; border-radius: var(--radius); border: 1px solid var(--border); }
+.api-card { background: var(--bg-surface); padding: 1.25rem; border-radius: var(--radius); border: 1px solid var(--border); margin-bottom: 1rem; }
 .api-row { display: flex; align-items: center; padding: 0.6rem 0; border-bottom: 1px solid var(--border); }
 .api-row:last-child { border-bottom: none; }
 .api-row .label { width: 110px; color: var(--text-muted); font-size: 0.875rem; font-weight: 500; margin-bottom: 0; text-transform: none; letter-spacing: 0; }
