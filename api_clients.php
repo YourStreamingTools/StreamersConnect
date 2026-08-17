@@ -60,7 +60,7 @@ $body = json_decode(file_get_contents('php://input'), true) ?: [];
 $action = $body['action'] ?? null;
 if ($method === 'POST') {
     if ($action === 'create') {
-        $name = trim($body['name'] ?? 'API Client');
+        $name = trim($body['name'] ?? '');
         $allowedOrigins = $body['allowed_origins'] ?? null;
         // Determine owner: admins may provide owner_twitch_id; otherwise default to the creating user's Twitch ID
         if ($isAdmin) {
@@ -68,9 +68,14 @@ if ($method === 'POST') {
         } else {
             $owner = $_SESSION['user_id'] ?? null;
         }
-        if (!$name) {
+        $existing = function_exists('list_api_clients_by_owner')
+            ? list_api_clients_by_owner($owner)
+            : [];
+        if (!$existing) {
+            $name = 'default';
+        } elseif ($name === '' || strcasecmp($name, 'default') === 0 || strcasecmp($name, 'api key') === 0 || strcasecmp($name, 'api client') === 0) {
             http_response_code(400);
-            echo json_encode(['success' => false, 'error' => 'Name is required']);
+            echo json_encode(['success' => false, 'error' => 'Give this key a name. The existing key is already named default.']);
             exit;
         }
         // Create client

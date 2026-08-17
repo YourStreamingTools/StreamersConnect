@@ -349,15 +349,47 @@ function get_api_client_by_owner($ownerTwitchId) {
     return $clients ? $clients[0] : false;
 }
 
+function ensure_default_api_client($ownerTwitchId) {
+    $conn = getStreamersConnectDB();
+    if (!$conn || $ownerTwitchId === null || $ownerTwitchId === '') {
+        return;
+    }
+    $stmt = $conn->prepare("SELECT id, name FROM api_clients WHERE owner_twitch_id = ? ORDER BY created_at ASC, id ASC");
+    $stmt->bind_param('s', $ownerTwitchId);
+    $stmt->execute();
+    $res = $stmt->get_result();
+    $oldestId = null;
+    $hasDefault = false;
+    while ($row = $res->fetch_assoc()) {
+        if ($oldestId === null) {
+            $oldestId = (int)$row['id'];
+        }
+        if (strcasecmp((string)$row['name'], 'default') === 0) {
+            $hasDefault = true;
+        }
+    }
+    $stmt->close();
+    if ($hasDefault || !$oldestId) {
+        return;
+    }
+    $defaultName = 'default';
+    $upd = $conn->prepare("UPDATE api_clients SET name = ? WHERE id = ? AND owner_twitch_id = ?");
+    $upd->bind_param('sis', $defaultName, $oldestId, $ownerTwitchId);
+    $upd->execute();
+    $upd->close();
+}
+
 function list_api_clients_by_owner($ownerTwitchId) {
     $conn = getStreamersConnectDB();
     if (!$conn) return [];
-    $stmt = $conn->prepare("SELECT id, client_id, name, owner_twitch_id, allowed_origins, is_active, usage_count, last_used, created_at, RIGHT(api_key, 6) AS api_key_suffix FROM api_clients WHERE owner_twitch_id = ? ORDER BY created_at DESC");
+    ensure_default_api_client($ownerTwitchId);
+    $stmt = $conn->prepare("SELECT id, client_id, name, owner_twitch_id, allowed_origins, is_active, usage_count, last_used, created_at, RIGHT(api_key, 6) AS api_key_suffix FROM api_clients WHERE owner_twitch_id = ? ORDER BY (LOWER(name) = 'default') DESC, created_at ASC, id ASC");
     $stmt->bind_param('s', $ownerTwitchId);
     $stmt->execute();
     $res = $stmt->get_result();
     $rows = [];
     while ($row = $res->fetch_assoc()) {
+        $row['is_default'] = strcasecmp((string)$row['name'], 'default') === 0 ? 1 : 0;
         $rows[] = $row;
     }
     $stmt->close();

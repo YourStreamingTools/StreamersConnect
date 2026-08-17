@@ -1771,7 +1771,7 @@ if (isset($_GET['auth_data'])) {
         <!-- API Access -->
         <div class="info-box">
             <h3><i class="fas fa-key"></i> API Access</h3>
-            <p class="info-text-white">Create API keys for server-to-server access to <code>/token_exchange.php</code> and <code>/verify_auth_sig.php</code>. You can have more than one key. Rotate or revoke any key at any time.</p>
+            <p class="info-text-white">Create API keys for server-to-server access to <code>/token_exchange.php</code> and <code>/verify_auth_sig.php</code>. Your first key is named <code>default</code>. Extra keys need their own names. Rotate or revoke any key at any time.</p>
             <button class="btn-create-app" id="createApiKeyBtn" type="button">
                 <i class="fas fa-plus"></i> Create API Key
             </button>
@@ -1949,6 +1949,7 @@ if (isset($_GET['auth_data'])) {
                         return;
                     }
                     const clients = Array.isArray(res.clients) ? res.clients : (res.client ? [res.client] : []);
+                    if (createBtn) createBtn.dataset.hasKeys = clients.length ? '1' : '0';
                     if (!clients.length) {
                         container.innerHTML = `
                             <div class="api-card">
@@ -1966,7 +1967,7 @@ if (isset($_GET['auth_data'])) {
                         html += `
                             <div class="api-card" data-client-id="${cid}">
                                 <div class="api-row api-header">
-                                    <div style="flex:1"><strong>${escapeHtml(client.name || 'API Key')}</strong></div>
+                                    <div style="flex:1"><strong>${escapeHtml(client.name || 'API Key')}</strong>${(client.is_default == 1 || String(client.name || '').toLowerCase() === 'default') ? ' <span class="tag is-success">Default</span>' : ''}</div>
                                     <div class="api-meta muted">${client.is_active == 1 ? 'Active' : 'Inactive'}</div>
                                 </div>
                                 <div class="api-row">
@@ -2022,19 +2023,27 @@ if (isset($_GET['auth_data'])) {
         }
 
         function promptCreateApiClient(button) {
+            if (!button || button.dataset.hasKeys !== '1') {
+                performCreateApiClient(button, 'default');
+                return;
+            }
             Swal.fire({
                 title: 'New API Key',
                 input: 'text',
                 inputLabel: 'Name',
-                inputValue: 'API Key',
                 inputPlaceholder: 'e.g. BotOfTheSpecter production',
+                inputValidator: function (value) {
+                    const name = String(value || '').trim();
+                    if (!name) return 'Name is required';
+                    if (name.toLowerCase() === 'default') return 'default is reserved for your first key';
+                    return undefined;
+                },
                 showCancelButton: true,
                 confirmButtonText: 'Create',
                 reverseButtons: true
             }).then(function (result) {
                 if (!result.isConfirmed) return;
-                const name = String(result.value || '').trim() || 'API Key';
-                performCreateApiClient(button, name);
+                performCreateApiClient(button, String(result.value || '').trim());
             });
         }
 
