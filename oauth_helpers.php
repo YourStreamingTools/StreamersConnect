@@ -40,7 +40,11 @@ function scFindAllowedDomainRow($domain) {
 }
 
 function scOAuthAppColumns($conn) {
-    return 'id, user_login, service, app_name, client_id, client_secret, is_default';
+    $cols = 'id, user_login, service, app_name, client_id, client_secret, is_default';
+    if (scHasColumn($conn, 'oauth_applications', 'force_verify')) {
+        $cols .= ', force_verify';
+    }
+    return $cols;
 }
 
 function scLoadOAuthAppById($appId, $service = null) {
@@ -98,8 +102,10 @@ function resolveOAuthAppForDomain($service, $domain) {
     if ($twitchId === '') {
         return null;
     }
+    $forceCol = scHasColumn($conn, 'oauth_applications', 'force_verify') ? ', oa.force_verify' : '';
     $stmt = $conn->prepare("
         SELECT oa.id, oa.user_login, oa.service, oa.app_name, oa.client_id, oa.client_secret, oa.is_default
+            {$forceCol}
         FROM dashboard_whitelist dw
         INNER JOIN oauth_applications oa ON dw.user_login = oa.user_login
         WHERE dw.twitch_id = ? AND oa.service = ? AND oa.is_default = 1

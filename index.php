@@ -70,12 +70,19 @@ if (isset($_GET['service']) && isset($_GET['login']) && isset($_GET['scopes'])) 
     }
     // Remember which OAuth app served this request so auth_logs can be grouped by app
     $resolvedApp = resolveOAuthAppForDomain($service, $originDomain);
+    $_SESSION['oauth_force_verify'] = 0;
     if ($resolvedApp) {
         $_SESSION['oauth_app_id'] = (int)$resolvedApp['id'];
+        if ($service === 'twitch' && !empty($resolvedApp['force_verify'])) {
+            $_SESSION['oauth_force_verify'] = 1;
+        }
     } elseif ($customClientId) {
         $byClient = findOAuthAppByClientId($customClientId);
         if ($byClient) {
             $_SESSION['oauth_app_id'] = (int)$byClient['id'];
+            if ($service === 'twitch' && !empty($byClient['force_verify'])) {
+                $_SESSION['oauth_force_verify'] = 1;
+            }
         }
     }
     // Validate service is supported
@@ -146,6 +153,14 @@ function buildTwitchAuthUrl($scopes, $customClientId = null, $originDomain = nul
         'state' => bin2hex(random_bytes(16)) // CSRF protection
     ];
     $_SESSION['oauth_state'] = $params['state'];
+    $forceVerify = !empty($_SESSION['oauth_force_verify']);
+    if (!$forceVerify && function_exists('findOAuthAppByClientId')) {
+        $app = findOAuthAppByClientId($clientId);
+        $forceVerify = $app && !empty($app['force_verify']);
+    }
+    if ($forceVerify) {
+        $params['force_verify'] = 'true';
+    }
     return 'https://id.twitch.tv/oauth2/authorize?' . http_build_query($params);
 }
 

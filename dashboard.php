@@ -79,9 +79,15 @@ if ($isWhitelisted) {
                 $client_id = $_POST['client_id'] ?? '';
                 $client_secret = $_POST['client_secret'] ?? '';
                 $is_default = isset($_POST['is_default']) ? 1 : 0;
+                $force_verify = ($service === 'twitch' && isset($_POST['force_verify'])) ? 1 : 0;
                 $domain_ids = isset($_POST['domain_ids']) ? json_decode($_POST['domain_ids'], true) : [];
-                $stmt = $conn->prepare("INSERT INTO oauth_applications (user_id, user_login, service, app_name, client_id, client_secret, is_default) VALUES (?, ?, ?, ?, ?, ?, ?)");
-                $stmt->bind_param('ssssssi', $twitchId, $userLogin, $service, $app_name, $client_id, $client_secret, $is_default);
+                if (scHasColumn($conn, 'oauth_applications', 'force_verify')) {
+                    $stmt = $conn->prepare("INSERT INTO oauth_applications (user_id, user_login, service, app_name, client_id, client_secret, is_default, force_verify) VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
+                    $stmt->bind_param('ssssssii', $twitchId, $userLogin, $service, $app_name, $client_id, $client_secret, $is_default, $force_verify);
+                } else {
+                    $stmt = $conn->prepare("INSERT INTO oauth_applications (user_id, user_login, service, app_name, client_id, client_secret, is_default) VALUES (?, ?, ?, ?, ?, ?, ?)");
+                    $stmt->bind_param('ssssssi', $twitchId, $userLogin, $service, $app_name, $client_id, $client_secret, $is_default);
+                }
                 $ok = $stmt->execute();
                 $newAppId = $conn->insert_id;
                 $stmt->close();
@@ -105,9 +111,15 @@ if ($isWhitelisted) {
                 $client_id = $_POST['client_id'] ?? '';
                 $client_secret = $_POST['client_secret'] ?? '';
                 $is_default = isset($_POST['is_default']) ? 1 : 0;
+                $force_verify = ($service === 'twitch' && isset($_POST['force_verify'])) ? 1 : 0;
                 $domain_ids = isset($_POST['domain_ids']) ? json_decode($_POST['domain_ids'], true) : [];
-                $stmt = $conn->prepare("UPDATE oauth_applications SET service=?, app_name=?, client_id=?, client_secret=?, is_default=? WHERE id=? AND user_login=?");
-                $stmt->bind_param('ssssiis', $service, $app_name, $client_id, $client_secret, $is_default, $id, $userLogin);
+                if (scHasColumn($conn, 'oauth_applications', 'force_verify')) {
+                    $stmt = $conn->prepare("UPDATE oauth_applications SET service=?, app_name=?, client_id=?, client_secret=?, is_default=?, force_verify=? WHERE id=? AND user_login=?");
+                    $stmt->bind_param('ssssiiis', $service, $app_name, $client_id, $client_secret, $is_default, $force_verify, $id, $userLogin);
+                } else {
+                    $stmt = $conn->prepare("UPDATE oauth_applications SET service=?, app_name=?, client_id=?, client_secret=?, is_default=? WHERE id=? AND user_login=?");
+                    $stmt->bind_param('ssssiis', $service, $app_name, $client_id, $client_secret, $is_default, $id, $userLogin);
+                }
                 $ok = $stmt->execute();
                 $stmt->close();
                 // Clear old domain assignments for this app
@@ -144,7 +156,8 @@ if ($isWhitelisted) {
             } elseif ($action === 'list') {
                 $apps = [];
                 $stmt = $conn->prepare("
-                    SELECT oa.id, oa.service, oa.app_name, oa.client_id, oa.client_secret, oa.is_default,
+                    SELECT oa.id, oa.service, oa.app_name, oa.client_id, oa.client_secret, oa.is_default
+                        " . (scHasColumn($conn, 'oauth_applications', 'force_verify') ? ', oa.force_verify' : '') . ",
                         (SELECT COUNT(*) FROM user_allowed_domains d WHERE d.oauth_app_id = oa.id AND d.twitch_id = ?) AS assigned_domains
                     FROM oauth_applications oa
                     WHERE oa.user_login=?
@@ -530,6 +543,16 @@ if ($isWhitelisted) {
                                     <code>&scopes=</code> URL parameter.
                                 </p>
                             </div>
+                            <div class="field" id="forceVerifyField">
+                                <label class="checkbox">
+                                    <input type="checkbox" id="modalForceVerify">
+                                    Force Twitch authorization every time
+                                </label>
+                                <p class="help">Unchecked by default. When checked, Twitch asks the user to click
+                                    <strong>Authorize</strong> on every login (<code>force_verify=true</code>).
+                                    Use this only when you need a fresh consent click. Discord apps ignore this.
+                                </p>
+                            </div>
                             <div class="field" id="domainSelectorField" style="display: none;">
                                 <label class="label">Assign to Specific Domains</label>
                                 <div class="control">
@@ -595,6 +618,7 @@ if ($isWhitelisted) {
                                     <li>Check "Default Application" if you want this used for all your domains by
                                         default</li>
                                     <li>Or select specific domains to use this OAuth app</li>
+                                    <li>Optionally check "Force Twitch authorization every time" so Twitch asks the user to click Authorize on every login</li>
                                 </ul>
                             </li>
                             <li>
@@ -747,6 +771,9 @@ if (isset($_GET['auth_data'])) {
                         res.apps.forEach(function (app) {
                             const serviceIcon = app.service === 'twitch' ? '<i class="fab fa-twitch"></i>' : '<i class="fab fa-discord"></i>';
                             const defaultBadge = app.is_default ? '<span class="tag is-success"><i class="fas fa-circle-check"></i> Default</span>' : '<span class="tag is-dark">Custom</span>';
+                            const forceBadge = (app.force_verify == 1 || app.force_verify === true || app.force_verify === '1')
+                                ? ' <span class="tag is-warning" title="Twitch will ask the user to authorize on every login"><i class="fas fa-rotate"></i> Force auth</span>'
+                                : '';
                             const appJson = JSON.stringify(app).replace(/"/g, '&quot;');
                             html += `
                             <tr data-id="${app.id}">
@@ -754,7 +781,7 @@ if (isset($_GET['auth_data'])) {
                                 <td>${serviceIcon} ${app.service.charAt(0).toUpperCase() + app.service.slice(1)}</td>
                                 <td><code class="is-size-7">${app.client_id}</code></td>
                                 <td class="has-text-centered">${Number(app.assigned_domains || 0)}</td>
-                                <td class="has-text-centered">${defaultBadge}</td>
+                                <td class="has-text-centered">${defaultBadge}${forceBadge}</td>
                                 <td class="has-text-centered">
                                     <div class="buttons is-centered">
                                         <button class="button is-small is-info oauthAppEditBtn" data-app='${appJson}'>
@@ -792,6 +819,7 @@ if (isset($_GET['auth_data'])) {
                 document.getElementById('modalClientId').value = (app && app.client_id) ? app.client_id : '';
                 document.getElementById('modalClientSecret').value = (app && app.client_secret) ? app.client_secret : '';
                 document.getElementById('modalIsDefault').checked = (app && app.is_default) ? true : false;
+                document.getElementById('modalForceVerify').checked = !!(app && (app.force_verify == 1 || app.force_verify === true || app.force_verify === '1'));
                 // Load domains for selection
                 loadDomainsForOAuthApp(edit, app);
                 // Setup checkbox handler for is_default
@@ -802,6 +830,16 @@ if (isset($_GET['auth_data'])) {
                 isDefaultCheckbox.onchange = function () {
                     domainSelectorField.style.display = this.checked ? 'none' : 'block';
                 };
+                const serviceSelect = document.getElementById('modalService');
+                function updateForceVerifyVisibility() {
+                    const isTwitch = serviceSelect.value === 'twitch';
+                    document.getElementById('forceVerifyField').style.display = isTwitch ? 'block' : 'none';
+                    if (!isTwitch) {
+                        document.getElementById('modalForceVerify').checked = false;
+                    }
+                }
+                serviceSelect.onchange = updateForceVerifyVisibility;
+                updateForceVerifyVisibility();
                 // Show modal using Bulma pattern
                 openModal(modal);
             }
@@ -858,6 +896,9 @@ if (isset($_GET['auth_data'])) {
                 data.append('client_id', clientId);
                 data.append('client_secret', clientSecret);
                 if (isDefault) data.append('is_default', '1');
+                if (service === 'twitch' && document.getElementById('modalForceVerify').checked) {
+                    data.append('force_verify', '1');
+                }
                 // Get selected domain IDs if not default
                 if (!isDefault) {
                     const selectedDomains = Array.from(document.querySelectorAll('.domain-checkbox:checked'))

@@ -366,6 +366,7 @@ Manage your OAuth applications (required):
 - **Create Applications**: Add Twitch or Discord OAuth apps with your Client ID/Secret
 - **Set Default**: Choose which app to use across all domains
 - **Domain-Specific Apps**: Assign different OAuth apps to different domains
+- **Force Twitch Authorization**: Optional per-app flag that sends `force_verify=true` so Twitch shows the authorize prompt on every login
 - **Security**: Client secrets are stored securely and never exposed
 
 ##### Benefits of Custom OAuth Apps

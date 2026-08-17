@@ -111,13 +111,13 @@ if (isset($_GET['code']) && isset($_GET['state'])) {
         $_SESSION['refresh_token'] = $returnData['refresh_token'];
         $_SESSION['auth_service'] = $service;
         // Clear OAuth state data
-        unset($_SESSION['oauth_state'], $_SESSION['return_url'], $_SESSION['origin_domain'], $_SESSION['requested_scopes'], $_SESSION['custom_client_id'], $_SESSION['custom_client_secret'], $_SESSION['oauth_app_id']);
+        unset($_SESSION['oauth_state'], $_SESSION['return_url'], $_SESSION['origin_domain'], $_SESSION['requested_scopes'], $_SESSION['custom_client_id'], $_SESSION['custom_client_secret'], $_SESSION['oauth_app_id'], $_SESSION['oauth_force_verify']);
         // Redirect to home page
         $redirectUrl = 'https://' . STREAMERS_CONNECT_DOMAIN . '/';
     } else {
         // External service authentication - send auth_data back
         // Clear sensitive session data we don't need anymore
-        unset($_SESSION['oauth_state'], $_SESSION['return_url'], $_SESSION['origin_domain'], $_SESSION['requested_scopes'], $_SESSION['auth_service'], $_SESSION['custom_client_id'], $_SESSION['custom_client_secret'], $_SESSION['oauth_app_id']);
+        unset($_SESSION['oauth_state'], $_SESSION['return_url'], $_SESSION['origin_domain'], $_SESSION['requested_scopes'], $_SESSION['auth_service'], $_SESSION['custom_client_id'], $_SESSION['custom_client_secret'], $_SESSION['oauth_app_id'], $_SESSION['oauth_force_verify']);
         // Legacy: encode the data as base64 JSON (kept for backwards compatibility)
         $legacy = base64_encode(json_encode($returnData));
         // Build redirect URL
