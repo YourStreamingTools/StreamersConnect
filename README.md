@@ -248,6 +248,7 @@ The authentication payload has the following structure:
 StreamersConnect/
 ├── index.php                 # Main entry point
 ├── dashboard.php             # Partner Dashboard
+├── oauth_helpers.php         # OAuth app resolution + auth log stamping
 ├── callback.php              # OAuth callback handler
 ├── token_exchange.php        # Server-side token exchange endpoint
 ├── verify_auth_sig.php       # Signed payload verification endpoint
@@ -255,6 +256,7 @@ StreamersConnect/
 ├── signing_keys.php          # Signing key management (admin)
 ├── scripts/
 │   └── cleanup_tokens.php    # Cron job for cleaning expired tokens
+├── sql/                      # New schema migrations only
 ├── config.example.php        # Configuration template
 └── README.md                 # This file
 ```
@@ -380,7 +382,7 @@ Self-service domain whitelist management:
 - **Add Domains**: Whitelist domains that can use your OAuth apps
 - **Assign OAuth Apps**: Select which OAuth app each domain uses
 - **Notes**: Document why each domain is whitelisted
-- **View Statistics**: See authentication activity per domain
+- **View Statistics**: See authentication activity per OAuth application and per domain
 
 #### 3. Webhook Management
 
@@ -433,8 +435,9 @@ Real-time analytics to track authentication activity:
 - **Total Authentications**: Overall count of all authentication attempts
 - **Monthly Stats**: Number of authentications in the current month
 - **Success Rate**: Percentage of successful authentications
-- **Domain Breakdown**: Authentication count and success rate per domain
-- **Recent Activity**: Last 5 authentication attempts with full details
+- **Application Breakdown**: Authentication count, success rate, and unique users per OAuth application
+- **Domain Breakdown**: Authentication count and success rate per domain, tagged with the OAuth app
+- **Recent Activity**: Last 5 authentication attempts with application, domain, and status
 
 ### Database Structure
 
@@ -442,7 +445,7 @@ StreamersConnect uses a MySQL database to manage partners and track activity.
 
 **Tables:**
 
-- `auth_logs` - Every authentication attempt (success/failure)
+- `auth_logs` - Every authentication attempt (success/failure), including the OAuth application that served it
 - `dashboard_whitelist` - Users with full dashboard access
 - `oauth_applications` - Partner OAuth applications (Twitch/Discord)
 - `allowed_domains` - Whitelisted domains with OAuth app assignments
@@ -458,7 +461,8 @@ Whitelisted users can view detailed statistics at:
 
 The stats page shows:
 
-- Overall authentication statistics
+- Overall authentication statistics (scoped to your domains)
+- Stats broken down by OAuth application
 - Stats broken down by domain
 - Stats broken down by service (Twitch/Discord)
 - Recent failed authentications with error details

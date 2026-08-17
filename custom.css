@@ -960,7 +960,31 @@ h3 {
 .swal2-cancel { background: var(--bg-card-hover) !important; color: var(--text-secondary) !important; border: 1px solid var(--border) !important; }
 
 /* ----------------------------------------------------------------
-   26. Responsive
+   26. OAuth app domain groups
+   ---------------------------------------------------------------- */
+.oauth-app-group {
+    margin-bottom: 1.25rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--bg-surface);
+    overflow: hidden;
+}
+.oauth-app-group-header {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    padding: 0.65rem 0.9rem;
+    background: var(--bg-card);
+    border-bottom: 1px solid var(--border);
+}
+.oauth-app-group-count {
+    color: var(--text-muted);
+    font-size: 0.8rem;
+}
+.oauth-app-group .table-container { margin-bottom: 0; }
+
+/* ----------------------------------------------------------------
+   27. Responsive
    ---------------------------------------------------------------- */
 @media (max-width: 640px) {
     body { padding: 1rem 0.65rem 2rem; }

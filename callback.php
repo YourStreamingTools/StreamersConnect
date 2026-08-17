@@ -3,6 +3,7 @@ session_start();
 
 // Load configuration
 require_once '/var/www/config/streamersconnect.php';
+require_once __DIR__ . '/oauth_helpers.php';
 
 /**
  * Handle OAuth callback from service provider
@@ -39,29 +40,29 @@ if (isset($_GET['code']) && isset($_GET['state'])) {
         case 'twitch':
             $tokenData = exchangeTwitchCodeForToken($authCode, $customClientId, $customClientSecret);
             if ($tokenData === false) {
-                logAuthAttempt($service, $originDomain, [], $requestedScopes, false, 'Failed to exchange authorization code for access token');
+                scLogAuthAttempt($service, $originDomain, [], $requestedScopes, false, 'Failed to exchange authorization code for access token');
                 die('Error: Failed to exchange authorization code for access token.');
             }
             $userData = getTwitchUserData($tokenData['access_token'], $customClientId);
             if ($userData === false) {
-                logAuthAttempt($service, $originDomain, [], $requestedScopes, false, 'Failed to retrieve user data from Twitch API');
+                scLogAuthAttempt($service, $originDomain, [], $requestedScopes, false, 'Failed to retrieve user data from Twitch API');
                 die('Error: Failed to retrieve user data from Twitch.');
             }
             break;
         case 'discord':
             $tokenData = exchangeDiscordCodeForToken($authCode, $customClientId, $customClientSecret);
             if ($tokenData === false) {
-                logAuthAttempt($service, $originDomain, [], $requestedScopes, false, 'Failed to exchange authorization code for access token');
+                scLogAuthAttempt($service, $originDomain, [], $requestedScopes, false, 'Failed to exchange authorization code for access token');
                 die('Error: Failed to exchange authorization code for access token.');
             }
             $userData = getDiscordUserData($tokenData['access_token']);
             if ($userData === false) {
-                logAuthAttempt($service, $originDomain, [], $requestedScopes, false, 'Failed to retrieve user data from Discord API');
+                scLogAuthAttempt($service, $originDomain, [], $requestedScopes, false, 'Failed to retrieve user data from Discord API');
                 die('Error: Failed to retrieve user data from Discord.');
             }
             break;
         default:
-            logAuthAttempt('unknown', $originDomain, [], $requestedScopes, false, 'Unknown service in session');
+            scLogAuthAttempt('unknown', $originDomain, [], $requestedScopes, false, 'Unknown service in session');
             die('Error: Unknown service in session');
     }
     // Prepare data to send back to the originating service
@@ -85,11 +86,11 @@ if (isset($_GET['code']) && isset($_GET['state'])) {
     // Get the return URL from session (originDomain and requestedScopes already loaded above)
     $returnUrl = $_SESSION['return_url'] ?? null;
     if (!$returnUrl || !$originDomain) {
-        logAuthAttempt($service ?? 'unknown', $originDomain ?? 'unknown', [], $requestedScopes, false, 'Missing return URL or origin domain in session');
+        scLogAuthAttempt($service ?? 'unknown', $originDomain ?? 'unknown', [], $requestedScopes, false, 'Missing return URL or origin domain in session');
         die('Error: No return URL found in session.');
     }
     // Log successful authentication
-    logAuthAttempt($service, $originDomain, $returnData['user'], $requestedScopes, true);
+    scLogAuthAttempt($service, $originDomain, $returnData['user'], $requestedScopes, true);
     // Dispatch webhook notifications (standard or Discord embed)
     dispatch_webhooks($service, $originDomain, $returnData['user'], 'authentication_success');
     // Store origin domain for display (before clearing session)
@@ -110,13 +111,13 @@ if (isset($_GET['code']) && isset($_GET['state'])) {
         $_SESSION['refresh_token'] = $returnData['refresh_token'];
         $_SESSION['auth_service'] = $service;
         // Clear OAuth state data
-        unset($_SESSION['oauth_state'], $_SESSION['return_url'], $_SESSION['origin_domain'], $_SESSION['requested_scopes'], $_SESSION['custom_client_id'], $_SESSION['custom_client_secret']);
+        unset($_SESSION['oauth_state'], $_SESSION['return_url'], $_SESSION['origin_domain'], $_SESSION['requested_scopes'], $_SESSION['custom_client_id'], $_SESSION['custom_client_secret'], $_SESSION['oauth_app_id']);
         // Redirect to home page
         $redirectUrl = 'https://' . STREAMERS_CONNECT_DOMAIN . '/';
     } else {
         // External service authentication - send auth_data back
         // Clear sensitive session data we don't need anymore
-        unset($_SESSION['oauth_state'], $_SESSION['return_url'], $_SESSION['origin_domain'], $_SESSION['requested_scopes'], $_SESSION['auth_service'], $_SESSION['custom_client_id'], $_SESSION['custom_client_secret']);
+        unset($_SESSION['oauth_state'], $_SESSION['return_url'], $_SESSION['origin_domain'], $_SESSION['requested_scopes'], $_SESSION['auth_service'], $_SESSION['custom_client_id'], $_SESSION['custom_client_secret'], $_SESSION['oauth_app_id']);
         // Legacy: encode the data as base64 JSON (kept for backwards compatibility)
         $legacy = base64_encode(json_encode($returnData));
         // Build redirect URL
@@ -148,7 +149,7 @@ if (isset($_GET['error'])) {
     $requestedScopes = $_SESSION['requested_scopes'] ?? '';
     // Log failed authentication
     if ($displayOrigin) {
-        logAuthAttempt($service, $displayOrigin, [], $requestedScopes, false, $errorDescription);
+        scLogAuthAttempt($service, $displayOrigin, [], $requestedScopes, false, $errorDescription);
         dispatch_webhooks($service, $displayOrigin, [], 'authentication_failure');
     }
     // Set error state for display

@@ -3,6 +3,7 @@ session_start();
 
 // Load configuration
 require_once '/var/www/config/streamersconnect.php';
+require_once __DIR__ . '/oauth_helpers.php';
 
 // Check if user is logged in
 if (!isset($_SESSION['user_id'])) {
@@ -129,6 +130,10 @@ if ($isWhitelisted) {
                 exit;
             } elseif ($action === 'delete') {
                 $id = intval($_POST['id'] ?? 0);
+                $clearStmt = $conn->prepare("UPDATE user_allowed_domains SET oauth_app_id=NULL WHERE oauth_app_id=? AND twitch_id=?");
+                $clearStmt->bind_param('is', $id, $twitchId);
+                $clearStmt->execute();
+                $clearStmt->close();
                 $stmt = $conn->prepare("DELETE FROM oauth_applications WHERE id=? AND user_login=?");
                 $stmt->bind_param('is', $id, $userLogin);
                 $ok = $stmt->execute();
@@ -138,8 +143,14 @@ if ($isWhitelisted) {
                 exit;
             } elseif ($action === 'list') {
                 $apps = [];
-                $stmt = $conn->prepare("SELECT id, service, app_name, client_id, client_secret, is_default FROM oauth_applications WHERE user_login=? ORDER BY is_default DESC, id DESC");
-                $stmt->bind_param('s', $userLogin);
+                $stmt = $conn->prepare("
+                    SELECT oa.id, oa.service, oa.app_name, oa.client_id, oa.client_secret, oa.is_default,
+                        (SELECT COUNT(*) FROM user_allowed_domains d WHERE d.oauth_app_id = oa.id AND d.twitch_id = ?) AS assigned_domains
+                    FROM oauth_applications oa
+                    WHERE oa.user_login=?
+                    ORDER BY oa.is_default DESC, oa.id DESC
+                ");
+                $stmt->bind_param('ss', $twitchId, $userLogin);
                 $stmt->execute();
                 $result = $stmt->get_result();
                 while ($row = $result->fetch_assoc()) {
@@ -205,11 +216,11 @@ if ($isWhitelisted) {
             } elseif ($action === 'list') {
                 $stmt = $conn->prepare("
                     SELECT d.id, d.domain, d.notes, d.created_at, d.oauth_app_id, 
-                           o.app_name, o.service 
+                           o.app_name, o.service, o.is_default AS app_is_default
                     FROM user_allowed_domains d 
                     LEFT JOIN oauth_applications o ON d.oauth_app_id = o.id 
                     WHERE d.twitch_id=? 
-                    ORDER BY d.domain ASC
+                    ORDER BY COALESCE(o.app_name, 'zzz'), d.domain ASC
                 ");
                 $stmt->bind_param('s', $twitchId);
                 $stmt->execute();
@@ -322,6 +333,7 @@ if ($isWhitelisted) {
 $authStats = null;
 $recentAuths = null;
 $domainStats = null;
+$appStats = null;
 if ($isWhitelisted) {
     $conn = getStreamersConnectDB();
     if ($conn) {
@@ -346,20 +358,24 @@ if ($isWhitelisted) {
         } else {
             $authStats['success_rate'] = 0;
         }
+        $appStats = scFetchPartnerAppStats($conn, $twitchId, $userLogin);
         // Get authentication by domain
         $stmt = $conn->prepare("
             SELECT 
                 al.origin_domain,
+                " . scResolvedAppNameExpr() . " AS app_name,
+                " . scResolvedAppServiceExpr() . " AS app_service,
                 COUNT(*) as auth_count,
                 SUM(CASE WHEN al.success = 1 THEN 1 ELSE 0 END) as successful,
                 MAX(al.created_at) as last_auth
             FROM auth_logs al
             INNER JOIN user_allowed_domains uad ON al.origin_domain = uad.domain
+            " . scPartnerAuthAppJoins($conn) . "
             WHERE uad.twitch_id = ?
-            GROUP BY al.origin_domain
+            GROUP BY al.origin_domain, app_name, app_service
             ORDER BY auth_count DESC
         ");
-        $stmt->bind_param('s', $twitchId);
+        $stmt->bind_param('ss', $userLogin, $twitchId);
         $stmt->execute();
         $result = $stmt->get_result();
         $domainStats = [];
@@ -376,14 +392,16 @@ if ($isWhitelisted) {
                 al.user_display_name,
                 al.success,
                 al.error_message,
-                al.created_at
+                al.created_at,
+                " . scResolvedAppNameExpr() . " AS app_name
             FROM auth_logs al
             INNER JOIN user_allowed_domains uad ON al.origin_domain = uad.domain
+            " . scPartnerAuthAppJoins($conn) . "
             WHERE uad.twitch_id = ?
             ORDER BY al.created_at DESC
             LIMIT 5
         ");
-        $stmt->bind_param('s', $twitchId);
+        $stmt->bind_param('ss', $userLogin, $twitchId);
         $stmt->execute();
         $result = $stmt->get_result();
         $recentAuths = [];
@@ -720,6 +738,7 @@ if (isset($_GET['auth_data'])) {
                                         <th><i class="fas fa-key"></i> Application Name</th>
                                         <th>Service</th>
                                         <th>Client ID</th>
+                                        <th class="has-text-centered">Domains</th>
                                         <th class="has-text-centered">Status</th>
                                         <th class="has-text-centered">Actions</th>
                                     </tr>
@@ -734,6 +753,7 @@ if (isset($_GET['auth_data'])) {
                                 <td><strong>${app.app_name}</strong></td>
                                 <td>${serviceIcon} ${app.service.charAt(0).toUpperCase() + app.service.slice(1)}</td>
                                 <td><code class="is-size-7">${app.client_id}</code></td>
+                                <td class="has-text-centered">${Number(app.assigned_domains || 0)}</td>
                                 <td class="has-text-centered">${defaultBadge}</td>
                                 <td class="has-text-centered">
                                     <div class="buttons is-centered">
@@ -970,54 +990,75 @@ if (isset($_GET['auth_data'])) {
                             list.innerHTML = '<div class="notification is-info is-light has-text-centered"><i class="fas fa-circle-info"></i> No domains configured yet. Click "Add Domain" below to get started.</div>';
                             return;
                         }
-                        let html = `
-                    <div class="table-container" style="margin-bottom: 1rem;">
-                        <table class="table is-fullwidth is-striped is-hoverable">
-                            <thead>
-                                <tr>
-                                    <th><i class="fas fa-globe"></i> Domain</th>
-                                    <th>OAuth Application</th>
-                                    <th>Notes</th>
-                                    <th>Added</th>
-                                    <th class="has-text-centered">Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody>`;
+                        const groups = {};
+                        const groupOrder = [];
                         res.domains.forEach(function (domain) {
-                            const addedDate = new Date(domain.created_at).toLocaleDateString();
-                            const notes = domain.notes ? domain.notes : '<em class="has-text-grey-light">No notes</em>';
-                            const domainJson = JSON.stringify(domain).replace(/"/g, '&quot;');
-                            let oauthAppDisplay = '<span class="tag is-info"><i class="fas fa-globe"></i> Default</span>';
-                            if (domain.oauth_app_id && domain.app_name) {
-                                const serviceIcon = domain.service === 'twitch' ? '<i class="fab fa-twitch"></i>' : '<i class="fab fa-discord"></i>';
-                                oauthAppDisplay = `<span class="tag is-primary">${serviceIcon} ${domain.app_name}</span>`;
+                            const key = domain.oauth_app_id ? ('app-' + domain.oauth_app_id) : 'default';
+                            if (!groups[key]) {
+                                groups[key] = {
+                                    app_name: domain.app_name || 'Default OAuth Application',
+                                    service: domain.service || '',
+                                    assigned: !!domain.oauth_app_id,
+                                    domains: []
+                                };
+                                groupOrder.push(key);
                             }
-                            const isWildcard = domain.domain.startsWith('*.');
-                            const wildcardBadge = isWildcard ? ' <span class="tag is-warning is-light" title="Matches all subdomains"><i class="fas fa-asterisk"></i>&nbsp;Wildcard</span>' : '';
-                            html += `
-                        <tr data-id="${domain.id}">
-                            <td><strong>${domain.domain}</strong>${wildcardBadge}</td>
-                            <td>${oauthAppDisplay}</td>
-                            <td>${notes}</td>
-                            <td class="is-size-7 has-text-grey-light">${addedDate}</td>
-                            <td class="has-text-centered">
-                                <div class="buttons is-centered">
-                                    <button class="button is-small is-info" onclick="showDomainModal(true, ${domainJson})">
-                                        <span class="icon is-small"><i class="fas fa-edit"></i></span>
-                                        <span>Edit</span>
-                                    </button>
-                                    <button class="button is-small is-danger" onclick="deleteDomain(${domain.id})">
-                                        <span class="icon is-small"><i class="fas fa-trash"></i></span>
-                                        <span>Delete</span>
-                                    </button>
-                                </div>
-                            </td>
-                        </tr>`;
+                            groups[key].domains.push(domain);
                         });
-                        html += `
-                            </tbody>
-                        </table>
-                    </div>`;
+                        groupOrder.sort(function (a, b) {
+                            if (a === 'default') return 1;
+                            if (b === 'default') return -1;
+                            return groups[a].app_name.localeCompare(groups[b].app_name);
+                        });
+                        let html = '';
+                        groupOrder.forEach(function (key) {
+                            const group = groups[key];
+                            const serviceIcon = group.service === 'twitch'
+                                ? '<i class="fab fa-twitch"></i>'
+                                : (group.service === 'discord' ? '<i class="fab fa-discord"></i>' : '<i class="fas fa-globe"></i>');
+                            const badge = group.assigned
+                                ? `<span class="tag is-primary">${serviceIcon} ${group.app_name}</span>`
+                                : '<span class="tag is-info"><i class="fas fa-globe"></i> Uses default application</span>';
+                            html += `<div class="oauth-app-group">
+                                <div class="oauth-app-group-header">${badge} <span class="oauth-app-group-count">${group.domains.length} domain${group.domains.length === 1 ? '' : 's'}</span></div>
+                                <div class="table-container">
+                                    <table class="table is-fullwidth is-striped is-hoverable">
+                                        <thead>
+                                            <tr>
+                                                <th><i class="fas fa-globe"></i> Domain</th>
+                                                <th>Notes</th>
+                                                <th>Added</th>
+                                                <th class="has-text-centered">Actions</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>`;
+                            group.domains.forEach(function (domain) {
+                                const addedDate = new Date(domain.created_at).toLocaleDateString();
+                                const notes = domain.notes ? domain.notes : '<em class="has-text-grey-light">No notes</em>';
+                                const domainJson = JSON.stringify(domain).replace(/"/g, '&quot;');
+                                const isWildcard = domain.domain.startsWith('*.');
+                                const wildcardBadge = isWildcard ? ' <span class="tag is-warning is-light" title="Matches all subdomains"><i class="fas fa-asterisk"></i>&nbsp;Wildcard</span>' : '';
+                                html += `
+                            <tr data-id="${domain.id}">
+                                <td><strong>${domain.domain}</strong>${wildcardBadge}</td>
+                                <td>${notes}</td>
+                                <td class="is-size-7 has-text-grey-light">${addedDate}</td>
+                                <td class="has-text-centered">
+                                    <div class="buttons is-centered">
+                                        <button class="button is-small is-info" onclick="showDomainModal(true, ${domainJson})">
+                                            <span class="icon is-small"><i class="fas fa-edit"></i></span>
+                                            <span>Edit</span>
+                                        </button>
+                                        <button class="button is-small is-danger" onclick="deleteDomain(${domain.id})">
+                                            <span class="icon is-small"><i class="fas fa-trash"></i></span>
+                                            <span>Delete</span>
+                                        </button>
+                                    </div>
+                                </td>
+                            </tr>`;
+                            });
+                            html += `</tbody></table></div></div>`;
+                        });
                         list.innerHTML = html;
                     });
             }
@@ -1423,6 +1464,61 @@ if (isset($_GET['auth_data'])) {
                 <p class="analytics-note"><i class="fas fa-circle-info"></i> Real-time analytics coming soon</p>
             <?php endif; ?>
         </div>
+        <?php if ($isWhitelisted && $appStats): ?>
+            <div class="info-box">
+                <h3><i class="fas fa-key"></i> Authentication by OAuth Application</h3>
+                <p class="info-text-white">Activity grouped by the OAuth application that handled the login</p>
+                <div class="table-responsive">
+                    <table class="table-dark">
+                        <thead>
+                            <tr>
+                                <th>Application</th>
+                                <th>Service</th>
+                                <th class="center">Total Auths</th>
+                                <th class="center">Success Rate</th>
+                                <th class="center">Unique Users</th>
+                                <th>Last Auth</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <?php foreach ($appStats as $stat):
+                                $successRate = $stat['auth_count'] > 0 ? round(($stat['successful'] / $stat['auth_count']) * 100, 1) : 0;
+                                if ($successRate >= 95) {
+                                    $successClass = 'rate-high';
+                                } elseif ($successRate >= 80) {
+                                    $successClass = 'rate-medium';
+                                } else {
+                                    $successClass = 'rate-low';
+                                }
+                                $service = $stat['app_service'] ?? '';
+                                $serviceIcon = $service === 'twitch' ? '<i class="fab fa-twitch service-twitch"></i>' : ($service === 'discord' ? '<i class="fab fa-discord service-discord"></i>' : '<i class="fas fa-key"></i>');
+                                ?>
+                                <tr class="table-row">
+                                    <td>
+                                        <strong><?php echo htmlspecialchars($stat['app_name']); ?></strong>
+                                        <?php if (!empty($stat['app_is_default'])): ?>
+                                            <span class="tag is-success">Default</span>
+                                        <?php endif; ?>
+                                    </td>
+                                    <td><?php echo $serviceIcon; ?> <?php echo htmlspecialchars(ucfirst($service)); ?></td>
+                                    <td class="center"><strong><?php echo number_format($stat['auth_count']); ?></strong></td>
+                                    <td class="center"><span class="<?php echo $successClass; ?>"><?php echo $successRate; ?>%</span></td>
+                                    <td class="center"><?php echo number_format($stat['unique_users']); ?></td>
+                                    <td>
+                                        <?php
+                                        if (!empty($stat['last_auth'])) {
+                                            $lastAuth = new DateTime($stat['last_auth']);
+                                            echo $lastAuth->format('M j, Y g:i A');
+                                        }
+                                        ?>
+                                    </td>
+                                </tr>
+                            <?php endforeach; ?>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        <?php endif; ?>
         <?php if ($isWhitelisted && $domainStats): ?>
             <!-- Domain Statistics -->
             <div class="info-box">
@@ -1433,6 +1529,7 @@ if (isset($_GET['auth_data'])) {
                         <thead>
                             <tr>
                                 <th>Domain</th>
+                                <th>OAuth Application</th>
                                 <th class="center">Total Auths</th>
                                 <th class="center">Success Rate</th>
                                 <th>Last Auth</th>
@@ -1454,6 +1551,7 @@ if (isset($_GET['auth_data'])) {
                                         <i class="fas fa-globe domain-icon"></i>
                                         <strong><?php echo htmlspecialchars($stat['origin_domain']); ?></strong>
                                     </td>
+                                    <td><?php echo htmlspecialchars($stat['app_name'] ?? 'Unassigned'); ?></td>
                                     <td class="center"><strong><?php echo number_format($stat['auth_count']); ?></strong></td>
                                     <td class="center"><span
                                             class="<?php echo $successClass; ?>"><?php echo $successRate; ?>%</span></td>
@@ -1472,13 +1570,14 @@ if (isset($_GET['auth_data'])) {
             <!-- Recent Authentication Activity -->
             <div class="info-box">
                 <h3><i class="fas fa-history"></i> Recent Authentication Activity</h3>
-                <p class="info-text-white">Last 5 authentication attempts across all domains</p>
+                <p class="info-text-white">Last 5 authentication attempts across all your OAuth applications</p>
                 <div class="table-responsive">
                     <table class="table-dark table-sm">
                         <thead>
                             <tr>
                                 <th>Time</th>
                                 <th>Service</th>
+                                <th>Application</th>
                                 <th>Domain</th>
                                 <th>User</th>
                                 <th class="center">Status</th>
@@ -1521,6 +1620,7 @@ if (isset($_GET['auth_data'])) {
                                     <td class="time-col"><span class="js-timeago"
                                             data-iso="<?php echo htmlspecialchars($auth['created_at']); ?>">...</span></td>
                                     <td class="service-col"><?php echo $serviceLabel; ?></td>
+                                    <td><?php echo htmlspecialchars($auth['app_name'] ?? 'Unassigned'); ?></td>
                                     <td class="domain-col"><?php echo htmlspecialchars($auth['origin_domain']); ?></td>
                                     <td class="user-col"><?php echo htmlspecialchars($auth['user_login'] ?? 'Unknown'); ?></td>
                                     <td class="status-col">
@@ -1542,7 +1642,7 @@ if (isset($_GET['auth_data'])) {
         <!-- Allowed Domains Management -->
         <div class="info-box">
             <h3><i class="fas fa-globe"></i> Allowed Domains</h3>
-            <p class="info-text-white">Manage domains authorized to use your OAuth applications.</p>
+            <p class="info-text-white">Manage domains authorized to use your OAuth applications. Domains are grouped by the application they are assigned to.</p>
             <?php if ($isWhitelisted): ?>
                 <!-- Bulma Modal for Domain -->
                 <div id="domainModal" class="modal">

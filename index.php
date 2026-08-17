@@ -3,6 +3,7 @@ session_start();
 
 // Load configuration
 require_once '/var/www/config/streamersconnect.php';
+require_once __DIR__ . '/oauth_helpers.php';
 
 // Handle auth callback for internal login
 if (isset($_GET['auth_data'])) {
@@ -65,6 +66,16 @@ if (isset($_GET['service']) && isset($_GET['login']) && isset($_GET['scopes'])) 
         if ($domainCredentials) {
             $customClientId = $customClientId ?? $domainCredentials['client_id'];
             $customClientSecret = $customClientSecret ?? $domainCredentials['client_secret'];
+        }
+    }
+    // Remember which OAuth app served this request so auth_logs can be grouped by app
+    $resolvedApp = resolveOAuthAppForDomain($service, $originDomain);
+    if ($resolvedApp) {
+        $_SESSION['oauth_app_id'] = (int)$resolvedApp['id'];
+    } elseif ($customClientId) {
+        $byClient = findOAuthAppByClientId($customClientId);
+        if ($byClient) {
+            $_SESSION['oauth_app_id'] = (int)$byClient['id'];
         }
     }
     // Validate service is supported

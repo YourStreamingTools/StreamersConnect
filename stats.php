@@ -1,6 +1,7 @@
 <?php
 session_start();
 require_once '/var/www/config/streamersconnect.php';
+require_once __DIR__ . '/oauth_helpers.php';
 
 if (!isset($_SESSION['user_id'])) {
     header('Location: https://streamersconnect.com/');
@@ -21,60 +22,92 @@ if (!$conn) {
     die('Database connection error');
 }
 
-// Overall stats
-$result = $conn->query("
+// Partner-scoped overall stats
+$stmt = $conn->prepare("
     SELECT 
         COUNT(*) as total_auths,
-        SUM(CASE WHEN success = 1 THEN 1 ELSE 0 END) as successful_auths,
-        SUM(CASE WHEN success = 0 THEN 1 ELSE 0 END) as failed_auths,
-        SUM(CASE WHEN DATE(created_at) = CURDATE() THEN 1 ELSE 0 END) as today,
-        SUM(CASE WHEN MONTH(created_at) = MONTH(CURRENT_DATE()) AND YEAR(created_at) = YEAR(CURRENT_DATE()) THEN 1 ELSE 0 END) as this_month,
-        MIN(created_at) as first_auth,
-        MAX(created_at) as last_auth
-    FROM auth_logs
+        SUM(CASE WHEN al.success = 1 THEN 1 ELSE 0 END) as successful_auths,
+        SUM(CASE WHEN al.success = 0 THEN 1 ELSE 0 END) as failed_auths,
+        SUM(CASE WHEN DATE(al.created_at) = CURDATE() THEN 1 ELSE 0 END) as today,
+        SUM(CASE WHEN MONTH(al.created_at) = MONTH(CURRENT_DATE()) AND YEAR(al.created_at) = YEAR(CURRENT_DATE()) THEN 1 ELSE 0 END) as this_month,
+        MIN(al.created_at) as first_auth,
+        MAX(al.created_at) as last_auth
+    FROM auth_logs al
+    INNER JOIN user_allowed_domains uad ON al.origin_domain = uad.domain
+    WHERE uad.twitch_id = ?
 ");
-$stats = $result->fetch_assoc();
+$stmt->bind_param('s', $twitchId);
+$stmt->execute();
+$stats = $stmt->get_result()->fetch_assoc();
+$stmt->close();
 $successRate = $stats['total_auths'] > 0 ? round(($stats['successful_auths'] / $stats['total_auths']) * 100, 2) : 0;
 
-// Stats by domain
-$domainStatsResult = $conn->query("
+$appStats = scFetchPartnerAppStats($conn, $twitchId, $userLogin);
+
+// Stats by domain (with resolved OAuth app)
+$stmt = $conn->prepare("
     SELECT 
-        origin_domain,
+        al.origin_domain,
+        " . scResolvedAppNameExpr() . " AS app_name,
         COUNT(*) as auth_count,
-        SUM(CASE WHEN success = 1 THEN 1 ELSE 0 END) as successful,
-        MAX(created_at) as last_auth
-    FROM auth_logs
-    GROUP BY origin_domain
+        SUM(CASE WHEN al.success = 1 THEN 1 ELSE 0 END) as successful,
+        MAX(al.created_at) as last_auth
+    FROM auth_logs al
+    INNER JOIN user_allowed_domains uad ON al.origin_domain = uad.domain
+    " . scPartnerAuthAppJoins($conn) . "
+    WHERE uad.twitch_id = ?
+    GROUP BY al.origin_domain, app_name
     ORDER BY auth_count DESC
 ");
+$stmt->bind_param('ss', $userLogin, $twitchId);
+$stmt->execute();
+$domainStatsResult = $stmt->get_result();
+$stmt->close();
 
 // Stats by service
-$serviceStatsResult = $conn->query("
+$stmt = $conn->prepare("
     SELECT 
-        service,
+        al.service,
         COUNT(*) as auth_count,
-        SUM(CASE WHEN success = 1 THEN 1 ELSE 0 END) as successful
-    FROM auth_logs
-    GROUP BY service
+        SUM(CASE WHEN al.success = 1 THEN 1 ELSE 0 END) as successful
+    FROM auth_logs al
+    INNER JOIN user_allowed_domains uad ON al.origin_domain = uad.domain
+    WHERE uad.twitch_id = ?
+    GROUP BY al.service
     ORDER BY auth_count DESC
 ");
+$stmt->bind_param('s', $twitchId);
+$stmt->execute();
+$serviceStatsResult = $stmt->get_result();
+$stmt->close();
 
 // Recent failures
-$failuresResult = $conn->query("
-    SELECT service, origin_domain, user_login, error_message, created_at
-    FROM auth_logs
-    WHERE success = 0
-    ORDER BY created_at DESC
+$stmt = $conn->prepare("
+    SELECT al.service, al.origin_domain, al.user_login, al.error_message, al.created_at,
+           " . scResolvedAppNameExpr() . " AS app_name
+    FROM auth_logs al
+    INNER JOIN user_allowed_domains uad ON al.origin_domain = uad.domain
+    " . scPartnerAuthAppJoins($conn) . "
+    WHERE uad.twitch_id = ? AND al.success = 0
+    ORDER BY al.created_at DESC
     LIMIT 10
 ");
+$stmt->bind_param('ss', $userLogin, $twitchId);
+$stmt->execute();
+$failuresResult = $stmt->get_result();
+$stmt->close();
 
 // Unique users
-$uniqueUsersResult = $conn->query("
-    SELECT COUNT(DISTINCT user_id) as unique_users
-    FROM auth_logs
-    WHERE success = 1 AND user_id IS NOT NULL
+$stmt = $conn->prepare("
+    SELECT COUNT(DISTINCT al.user_id) as unique_users
+    FROM auth_logs al
+    INNER JOIN user_allowed_domains uad ON al.origin_domain = uad.domain
+    WHERE uad.twitch_id = ? AND al.success = 1 AND al.user_id IS NOT NULL
 ");
-$uniqueUsers = $uniqueUsersResult->fetch_assoc();
+$stmt->bind_param('s', $twitchId);
+$stmt->execute();
+$uniqueUsers = $stmt->get_result()->fetch_assoc();
+$stmt->close();
 
 // Unique users per domain
 $stmt = $conn->prepare("
@@ -120,14 +153,16 @@ $stmt = $conn->prepare("
         al.user_id,
         al.user_login,
         al.user_display_name,
-        al.created_at
+        al.created_at,
+        " . scResolvedAppNameExpr() . " AS app_name
     FROM auth_logs al
     INNER JOIN user_allowed_domains uad ON al.origin_domain = uad.domain
+    " . scPartnerAuthAppJoins($conn) . "
     WHERE uad.twitch_id = ? AND al.success = 1
     ORDER BY al.created_at DESC
     LIMIT ? OFFSET ?
 ");
-$stmt->bind_param('sii', $twitchId, $recentAuthsPerPage, $recentAuthsOffset);
+$stmt->bind_param('ssii', $userLogin, $twitchId, $recentAuthsPerPage, $recentAuthsOffset);
 $stmt->execute();
 $recentSuccessfulAuths = $stmt->get_result();
 $stmt->close();
@@ -254,6 +289,55 @@ $stmt->close();
                 </div>
             <?php endif; ?>
         </div>
+        <?php if (!empty($appStats)): ?>
+        <div class="info-box">
+            <h3><i class="fas fa-key"></i> Authentication by OAuth Application</h3>
+            <p class="info-text-white">Your authentication activity grouped by the OAuth application that handled each login.</p>
+            <div class="table-responsive">
+                <table class="table-light">
+                    <thead>
+                        <tr>
+                            <th>Application</th>
+                            <th>Service</th>
+                            <th class="center">Total</th>
+                            <th class="center">Successful</th>
+                            <th class="center">Success Rate</th>
+                            <th class="center">Unique Users</th>
+                            <th>Last Auth</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php foreach ($appStats as $row):
+                            $rate = $row['auth_count'] > 0 ? round(($row['successful'] / $row['auth_count']) * 100, 1) : 0;
+                            if ($rate >= 95) {
+                                $rateClass = 'rate-high';
+                            } elseif ($rate >= 80) {
+                                $rateClass = 'rate-medium';
+                            } else {
+                                $rateClass = 'rate-low';
+                            }
+                            $icon = ($row['app_service'] ?? '') === 'twitch' ? '<i class="fab fa-twitch service-twitch"></i>' : (($row['app_service'] ?? '') === 'discord' ? '<i class="fab fa-discord service-discord"></i>' : '<i class="fas fa-key"></i>');
+                            ?>
+                            <tr class="table-row">
+                                <td>
+                                    <strong><?php echo htmlspecialchars($row['app_name']); ?></strong>
+                                    <?php if (!empty($row['app_is_default'])): ?>
+                                        <span class="tag is-success">Default</span>
+                                    <?php endif; ?>
+                                </td>
+                                <td><?php echo $icon; ?> <?php echo htmlspecialchars(ucfirst($row['app_service'] ?? '')); ?></td>
+                                <td class="center"><?php echo number_format($row['auth_count']); ?></td>
+                                <td class="center value-green"><?php echo number_format($row['successful']); ?></td>
+                                <td class="center"><span class="<?php echo $rateClass; ?>"><?php echo $rate; ?>%</span></td>
+                                <td class="center value-indigo fw-600"><?php echo number_format($row['unique_users']); ?></td>
+                                <td><?php echo !empty($row['last_auth']) ? date('M j, Y g:i A', strtotime($row['last_auth'])) : '—'; ?></td>
+                            </tr>
+                        <?php endforeach; ?>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        <?php endif; ?>
         <!-- By Domain -->
         <div class="info-box">
             <h3><i class="fas fa-globe"></i> Authentication by Domain</h3>
@@ -262,6 +346,7 @@ $stmt->close();
                     <thead>
                         <tr>
                             <th>Domain</th>
+                            <th>OAuth Application</th>
                             <th class="center">Total</th>
                             <th class="center">Successful</th>
                             <th class="center">Success Rate</th>
@@ -281,6 +366,7 @@ $stmt->close();
                             ?>
                             <tr class="table-row">
                                 <td><strong><?php echo htmlspecialchars($row['origin_domain']); ?></strong></td>
+                                <td><?php echo htmlspecialchars($row['app_name'] ?? 'Unassigned'); ?></td>
                                 <td class="center"><?php echo number_format($row['auth_count']); ?></td>
                                 <td class="center value-green"><?php echo number_format($row['successful']); ?></td>
                                 <td class="center"><span class="<?php echo $rateClass; ?>"><?php echo $rate; ?>%</span></td>
@@ -330,6 +416,7 @@ $stmt->close();
                             <tr>
                                 <th>Time</th>
                                 <th>Service</th>
+                                <th>Application</th>
                                 <th>Domain</th>
                                 <th>User</th>
                                 <th>Error</th>
@@ -340,6 +427,7 @@ $stmt->close();
                                 <tr class="table-row">
                                     <td><?php echo date('M j, g:i A', strtotime($row['created_at'])); ?></td>
                                     <td><?php echo ucfirst($row['service']); ?></td>
+                                    <td><?php echo htmlspecialchars($row['app_name'] ?? 'Unassigned'); ?></td>
                                     <td><?php echo htmlspecialchars($row['origin_domain']); ?></td>
                                     <td><?php echo htmlspecialchars($row['user_login'] ?? 'Unknown'); ?></td>
                                     <td class="text-danger"><?php echo htmlspecialchars($row['error_message'] ?? 'Unknown'); ?>
@@ -405,6 +493,7 @@ $stmt->close();
                                 <th>Service</th>
                                 <th>User</th>
                                 <th>Display Name</th>
+                                <th>Application</th>
                                 <th>Domain</th>
                             </tr>
                         </thead>
@@ -426,6 +515,9 @@ $stmt->close();
                                     <td><strong>
                                             <?php echo htmlspecialchars($row['user_display_name'] ?? $row['user_login']); ?>
                                         </strong></td>
+                                    <td>
+                                        <?php echo htmlspecialchars($row['app_name'] ?? 'Unassigned'); ?>
+                                    </td>
                                     <td>
                                         <?php echo htmlspecialchars($row['origin_domain']); ?>
                                     </td>

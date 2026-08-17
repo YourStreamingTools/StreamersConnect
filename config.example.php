@@ -136,7 +136,7 @@ function getOAuthCredentialsForDomain($service, $domain) {
     if (!$conn) return null;
     // 1. Exact match — domain with a custom OAuth app assigned
     $stmt = $conn->prepare("
-        SELECT oa.client_id, oa.client_secret
+        SELECT oa.id, oa.client_id, oa.client_secret
         FROM user_allowed_domains uad
         INNER JOIN oauth_applications oa ON uad.oauth_app_id = oa.id
         WHERE uad.domain = ? AND oa.service = ?
@@ -146,12 +146,12 @@ function getOAuthCredentialsForDomain($service, $domain) {
     $result = $stmt->get_result();
     if ($row = $result->fetch_assoc()) {
         $stmt->close();
-        return ['client_id' => $row['client_id'], 'client_secret' => $row['client_secret']];
+        return ['id' => $row['id'], 'client_id' => $row['client_id'], 'client_secret' => $row['client_secret']];
     }
     $stmt->close();
     // 2. Wildcard match — wildcard entry with a custom OAuth app assigned
     $stmt = $conn->prepare("
-        SELECT oa.client_id, oa.client_secret, uad.domain AS pattern
+        SELECT oa.id, oa.client_id, oa.client_secret, uad.domain AS pattern
         FROM user_allowed_domains uad
         INNER JOIN oauth_applications oa ON uad.oauth_app_id = oa.id
         WHERE uad.domain LIKE '*.%' AND oa.service = ?
@@ -163,13 +163,13 @@ function getOAuthCredentialsForDomain($service, $domain) {
         $suffix = substr($row['pattern'], 2);
         if (str_ends_with($domain, '.' . $suffix)) {
             $stmt->close();
-            return ['client_id' => $row['client_id'], 'client_secret' => $row['client_secret']];
+            return ['id' => $row['id'], 'client_id' => $row['client_id'], 'client_secret' => $row['client_secret']];
         }
     }
     $stmt->close();
     // 3. Exact match — domain owner's default OAuth app
     $stmt = $conn->prepare("
-        SELECT oa.client_id, oa.client_secret
+        SELECT oa.id, oa.client_id, oa.client_secret
         FROM user_allowed_domains uad
         INNER JOIN dashboard_whitelist dw ON uad.twitch_id = dw.twitch_id
         INNER JOIN oauth_applications oa ON dw.user_login = oa.user_login
@@ -181,12 +181,12 @@ function getOAuthCredentialsForDomain($service, $domain) {
     $result = $stmt->get_result();
     if ($row = $result->fetch_assoc()) {
         $stmt->close();
-        return ['client_id' => $row['client_id'], 'client_secret' => $row['client_secret']];
+        return ['id' => $row['id'], 'client_id' => $row['client_id'], 'client_secret' => $row['client_secret']];
     }
     $stmt->close();
     // 4. Wildcard match — wildcard entry owner's default OAuth app
     $stmt = $conn->prepare("
-        SELECT oa.client_id, oa.client_secret, uad.domain AS pattern
+        SELECT oa.id, oa.client_id, oa.client_secret, uad.domain AS pattern
         FROM user_allowed_domains uad
         INNER JOIN dashboard_whitelist dw ON uad.twitch_id = dw.twitch_id
         INNER JOIN oauth_applications oa ON dw.user_login = oa.user_login
@@ -199,7 +199,7 @@ function getOAuthCredentialsForDomain($service, $domain) {
         $suffix = substr($row['pattern'], 2);
         if (str_ends_with($domain, '.' . $suffix)) {
             $stmt->close();
-            return ['client_id' => $row['client_id'], 'client_secret' => $row['client_secret']];
+            return ['id' => $row['id'], 'client_id' => $row['client_id'], 'client_secret' => $row['client_secret']];
         }
     }
     $stmt->close();
